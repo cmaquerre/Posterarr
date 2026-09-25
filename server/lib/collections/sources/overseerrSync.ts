@@ -5,6 +5,16 @@ import {
   getCollectionMediaType,
   type LibraryItemsCache,
 } from '@server/lib/collections/core/CollectionUtilities';
+import {
+  removeItemLabelFromLibrary,
+  unwatchedLabel,
+} from '@server/lib/collections/core/itemLabels';
+import {
+  equalsManaged,
+  isManagedLabel,
+  LABEL_PREFIX,
+  toLegacyLabel,
+} from '@server/lib/collections/core/labelPrefix';
 import type {
   CollectionItem,
   CollectionOperationResult,
@@ -1025,7 +1035,7 @@ export class OverseerrCollectionSync extends BaseCollectionSync<'overseerr'> {
       }
 
       // Generate unique label name for this user's collection items
-      const itemLabelName = `agregarr-unwatched-${config.id}-${userId}`;
+      const itemLabelName = unwatchedLabel(`${config.id}-${userId}`);
       const smartLabel = customLabel; // Use same label as base collection would have used
 
       logger.debug(
@@ -1120,6 +1130,26 @@ export class OverseerrCollectionSync extends BaseCollectionSync<'overseerr'> {
         );
       }
 
+      // Drop the item label written under the legacy prefix; the smart
+      // collection filter is rewritten to the current label below
+      try {
+        const legacyLabelName = toLegacyLabel(itemLabelName);
+        const legacyLabeledItems = await plexClient.getItemsWithLabel(
+          libraryKey,
+          legacyLabelName
+        );
+        for (const itemKey of legacyLabeledItems) {
+          await plexClient.removeLabelFromItem(itemKey, legacyLabelName);
+        }
+      } catch (error) {
+        logger.warn(`Failed to remove legacy unwatched labels`, {
+          label: 'Overseerr User Smart Collection Creation',
+          collectionName,
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       // MIGRATION: Check for old dual-collection system (dash-prefixed base + smart collection)
       // Match by label first, then fall back to name matching (like BaseCollectionSync)
       let oldDashPrefixedBase: PlexCollection | null = null;
@@ -1133,7 +1163,7 @@ export class OverseerrCollectionSync extends BaseCollectionSync<'overseerr'> {
         const hasMatchingLabel = collection.labels?.some(
           (label: string | PlexLabel) => {
             const labelText = typeof label === 'string' ? label : label.tag;
-            return labelText === smartLabel;
+            return equalsManaged(labelText, smartLabel);
           }
         );
 
@@ -1161,14 +1191,14 @@ export class OverseerrCollectionSync extends BaseCollectionSync<'overseerr'> {
           if (collection.libraryKey !== libraryKey) continue;
 
           // Check for orphaned posterarr collections by name
-          const hasAgregarrLabel = collection.labels?.some(
+          const hasPosterarrLabel = collection.labels?.some(
             (label: string | PlexLabel) => {
               const labelText = typeof label === 'string' ? label : label.tag;
-              return labelText.toLowerCase().startsWith('agregarr');
+              return isManagedLabel(labelText);
             }
           );
 
-          if (hasAgregarrLabel) {
+          if (hasPosterarrLabel) {
             const isSmart = collection.smart === '1';
 
             if (isSmart && collection.title === collectionName) {
@@ -1353,6 +1383,12 @@ export class OverseerrCollectionSync extends BaseCollectionSync<'overseerr'> {
       // Apply metadata to smart collection (sort title, visibility, poster)
       // Replicate what updateCollectionMetadata does in BaseCollectionSync
       if (smartCollectionRatingKey) {
+        // Rewrite the management label (replaces a legacy-prefixed one)
+        await plexClient.addLabelToCollection(
+          smartCollectionRatingKey,
+          smartLabel
+        );
+
         // Calculate and apply sort title (handles promotion with exclamation marks)
         const sortOrderLibrary = config.sortOrderLibrary;
         const isLibraryPromoted = config.isLibraryPromoted;
@@ -1471,7 +1507,7 @@ export class OverseerrCollectionSync extends BaseCollectionSync<'overseerr'> {
           const hasMatchingLabel = collection.labels?.some(
             (label: string | PlexLabel) => {
               const labelText = typeof label === 'string' ? label : label.tag;
-              return labelText === smartLabel;
+              return equalsManaged(labelText, smartLabel);
             }
           );
           const inCorrectLibrary = collection.libraryKey === libraryKey;
@@ -1499,29 +1535,16 @@ export class OverseerrCollectionSync extends BaseCollectionSync<'overseerr'> {
       );
 
       // NEW APPROACH: Clean up item labels
-      const itemLabelName = `agregarr-unwatched-${config.id}-${userId}`;
+      const itemLabelName = unwatchedLabel(`${config.id}-${userId}`);
       const libraryId = this.getLibraryKeyFromConfig(config);
 
       try {
-        const labeledItems = await plexClient.getItemsWithLabel(
-          libraryId,
-          itemLabelName
-        );
-
-        if (labeledItems.length > 0) {
-          logger.info(
-            `Removing label "${itemLabelName}" from ${labeledItems.length} items`,
-            {
-              label: 'Overseerr User Smart Collection Cleanup',
-              userId,
-              itemLabelName,
-              itemCount: labeledItems.length,
-            }
-          );
-          for (const itemKey of labeledItems) {
-            await plexClient.removeLabelFromItem(itemKey, itemLabelName);
-          }
-        }
+        logger.info(`Removing label "${itemLabelName}" from items`, {
+          label: 'Overseerr User Smart Collection Cleanup',
+          userId,
+          itemLabelName,
+        });
+        await removeItemLabelFromLibrary(plexClient, libraryId, itemLabelName);
       } catch (error) {
         logger.warn(
           `Failed to cleanup labels during smart collection cleanup`,
@@ -1750,13 +1773,13 @@ export class OverseerrCollectionSync extends BaseCollectionSync<'overseerr'> {
   ): string {
     switch (config.subtype) {
       case 'global':
-        return `AgregarrOverseerrAll${config.id}`;
+        return `${LABEL_PREFIX}OverseerrAll${config.id}`;
       case 'server_owner':
-        return `AgregarrOverseerrOwner${user.plexId || user.id}`;
+        return `${LABEL_PREFIX}OverseerrOwner${user.plexId || user.id}`;
       case 'users':
-        return `AgregarrOverseerrUser${user.plexId || user.id}`;
+        return `${LABEL_PREFIX}OverseerrUser${user.plexId || user.id}`;
       default:
-        return `AgregarrOverseerrAll${config.id}`;
+        return `${LABEL_PREFIX}OverseerrAll${config.id}`;
     }
   }
 

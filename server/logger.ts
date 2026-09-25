@@ -2,15 +2,19 @@ import fs from 'fs';
 import path from 'path';
 import * as winston from 'winston';
 import 'winston-daily-rotate-file';
+import { LEGACY_LABEL_PREFIX } from './lib/collections/core/labelPrefix';
 
-// Migrate away from old log
-const OLD_LOG_FILE = path.join(__dirname, '../config/logs/agregarr.log');
-if (fs.existsSync(OLD_LOG_FILE)) {
-  const file = fs.lstatSync(OLD_LOG_FILE);
+const LOG_DIRECTORY = process.env.CONFIG_DIRECTORY
+  ? `${process.env.CONFIG_DIRECTORY}/logs`
+  : path.join(__dirname, '../config/logs');
 
-  if (!file.isSymbolicLink()) {
-    fs.unlinkSync(OLD_LOG_FILE);
-  }
+// Migrate away from the log symlink written under the legacy name
+const OLD_LOG_FILE = path.join(
+  LOG_DIRECTORY,
+  `${LEGACY_LABEL_PREFIX.toLowerCase()}.log`
+);
+if (fs.lstatSync(OLD_LOG_FILE, { throwIfNoEntry: false })) {
+  fs.unlinkSync(OLD_LOG_FILE);
 }
 
 const hformat = winston.format.printf(
@@ -67,15 +71,13 @@ const logger = winston.createLogger({
       ),
     }),
     new winston.transports.DailyRotateFile({
-      filename: process.env.CONFIG_DIRECTORY
-        ? `${process.env.CONFIG_DIRECTORY}/logs/agregarr-%DATE%.log`
-        : path.join(__dirname, '../config/logs/agregarr-%DATE%.log'),
+      filename: path.join(LOG_DIRECTORY, 'posterarr-%DATE%.log'),
       datePattern: 'YYYY-MM-DD',
       zippedArchive: true,
       maxSize: '20m',
       maxFiles: '7d',
       createSymlink: true,
-      symlinkName: 'agregarr.log',
+      symlinkName: 'posterarr.log',
     }),
     new winston.transports.DailyRotateFile({
       filename: process.env.CONFIG_DIRECTORY

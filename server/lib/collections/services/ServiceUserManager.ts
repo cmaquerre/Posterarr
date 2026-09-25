@@ -1,6 +1,7 @@
 import OverseerrAPI, { type OverseerrUser } from '@server/api/overseerr';
 import { getRepository } from '@server/datasource';
 import { User } from '@server/entity/User';
+import { LEGACY_LABEL_PREFIX } from '@server/lib/collections/core/labelPrefix';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { AxiosError } from 'axios';
@@ -94,29 +95,30 @@ export function generateServiceUserConfig(
 
   switch (userCreationMode) {
     case 'single':
-      // Single mode: Everything goes to "Agregarr"
-      username = 'Agregarr';
-      displayName = 'Agregarr';
-      email = 'donotchangeme@agregarr.invalid';
+      // Single mode: Everything goes to "Posterarr"
+      username = 'Posterarr';
+      displayName = 'Posterarr';
+      email = 'donotchangeme@posterarr.invalid';
       avatar = '/os_icon.svg';
-      description = 'Virtual service user for all Agregarr collection requests';
+      description =
+        'Virtual service user for all Posterarr collection requests';
       break;
 
     case 'granular':
       if (collectionType) {
-        // Granular mode: TraktTrendingAgregarr, TMDbPopularAgregarr, etc.
+        // Granular mode: TraktTrendingPosterarr, TMDbPopularPosterarr, etc.
         const collectionName =
           collectionType.charAt(0).toUpperCase() + collectionType.slice(1);
-        username = `${serviceInfo.name}${collectionName}Agregarr`;
+        username = `${serviceInfo.name}${collectionName}Posterarr`;
         displayName = username;
-        email = `donotchangeme@${serviceType.toLowerCase()}.${collectionType.toLowerCase()}.agregarr.invalid`;
+        email = `donotchangeme@${serviceType.toLowerCase()}.${collectionType.toLowerCase()}.posterarr.invalid`;
         avatar = '/os_icon.svg';
         description = `Virtual service user for ${serviceInfo.name} ${collectionName} collection requests`;
       } else {
         // Fallback to per-service if no collection type
-        username = `${serviceInfo.name}Agregarr`;
+        username = `${serviceInfo.name}Posterarr`;
         displayName = username;
-        email = `donotchangeme@${serviceType.toLowerCase()}.agregarr.invalid`;
+        email = `donotchangeme@${serviceType.toLowerCase()}.posterarr.invalid`;
         avatar = '/os_icon.svg';
         description = `Virtual service user for ${serviceInfo.name} collection requests`;
       }
@@ -124,10 +126,10 @@ export function generateServiceUserConfig(
 
     case 'per-service':
     default:
-      // Per-service mode: TraktAgregarr, TMDbAgregarr, etc.
-      username = `${serviceInfo.name}Agregarr`;
+      // Per-service mode: TraktPosterarr, TMDbPosterarr, etc.
+      username = `${serviceInfo.name}Posterarr`;
       displayName = username;
-      email = `donotchangeme@${serviceType.toLowerCase()}.agregarr.invalid`;
+      email = `donotchangeme@${serviceType.toLowerCase()}.posterarr.invalid`;
       avatar = '/os_icon.svg';
       description = `Virtual service user for ${serviceInfo.name} collection requests`;
       break;
@@ -180,12 +182,24 @@ export class ServiceUserManager {
       where: { email: config.email },
     });
 
-    // If not found with new format, try old format (migration path)
-    if (!serviceUser && config.email.endsWith('.invalid')) {
-      const oldEmail = config.email.replace('.invalid', '');
-      serviceUser = await this.userRepository.findOne({
-        where: { email: oldEmail },
-      });
+    // If not found with new format, try older formats (migration path): the
+    // email under the legacy prefix, with and without the .invalid TLD
+    if (!serviceUser && config.email.endsWith('.posterarr.invalid')) {
+      const legacyEmail = config.email.replace(
+        /\.posterarr\.invalid$/,
+        `.${LEGACY_LABEL_PREFIX.toLowerCase()}.invalid`
+      );
+      const candidates = [legacyEmail, legacyEmail.replace(/\.invalid$/, '')];
+      let oldEmail = '';
+      for (const candidate of candidates) {
+        serviceUser = await this.userRepository.findOne({
+          where: { email: candidate },
+        });
+        if (serviceUser) {
+          oldEmail = candidate;
+          break;
+        }
+      }
 
       // Migrate to new email format
       if (serviceUser) {
@@ -197,8 +211,10 @@ export class ServiceUserManager {
           }
         );
 
-        // Update internal user email
+        // Update internal user identity
         serviceUser.email = config.email;
+        serviceUser.username = config.username;
+        serviceUser.displayName = config.displayName;
         serviceUser.updatedAt = new Date();
 
         // Recreate external Overseerr user with new email (email is read-only, can't be updated)
@@ -506,7 +522,7 @@ export class ServiceUserManager {
       permissions: config.permissions,
       userType: 1, // LOCAL user type
       externalOverseerrId: externalUser.id,
-      avatar: '/os_icon.svg', // Default Agregarr icon for service users
+      avatar: '/os_icon.svg', // Default Posterarr icon for service users
       createdAt: new Date(),
       updatedAt: new Date(),
     });

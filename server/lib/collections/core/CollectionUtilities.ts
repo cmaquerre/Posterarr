@@ -5,6 +5,12 @@ import { templateEngine } from '@server/lib/collections/utils/TemplateEngine';
 import type { CollectionConfig } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
+import {
+  isManagedLabel,
+  LABEL_PREFIX,
+  LABEL_PREFIX_PATTERN,
+  startsWithManaged,
+} from './labelPrefix';
 import type {
   AutoRequestResult,
   CollectionItem,
@@ -80,7 +86,7 @@ export function generateGlobalCollectionName(): string {
 // Collection-specific utilities
 
 /**
- * Clean Agregarr-specific labels from filter strings
+ * Clean Posterarr-specific labels from filter strings
  * Used to remove auto-generated labels when updating user filters
  *
  * Plex filter syntax: filter1&filter2&filter3
@@ -119,13 +125,13 @@ export function cleanOverseerrLabels(filterStr: string): string {
             const labels = valuesStr.split(',');
 
             // Filter out Posterarr user/owner labels only
-            const nonAgregarrLabels = labels.filter(
-              (label) => !label.toLowerCase().startsWith('agregarr')
+            const nonPosterarrLabels = labels.filter(
+              (label) => !isManagedLabel(label)
             );
 
             // Reconstruct the label filter if there are remaining labels
-            if (nonAgregarrLabels.length > 0) {
-              return `label!=${nonAgregarrLabels.join(',')}`;
+            if (nonPosterarrLabels.length > 0) {
+              return `label!=${nonPosterarrLabels.join(',')}`;
             }
 
             return ''; // All labels were Posterarr labels
@@ -146,12 +152,12 @@ export function cleanOverseerrLabels(filterStr: string): string {
 }
 
 /**
- * Clean Agregarr-specific labels from collection label arrays
+ * Clean Posterarr-specific labels from collection label arrays
  * Preserves user's custom labels while removing auto-generated ones
  * @param existingLabels Array of current labels on the collection
  * @param preserveLabel Optional specific Posterarr label to preserve during cleaning
  */
-export function cleanAgregarrCollectionLabels(
+export function cleanPosterarrCollectionLabels(
   existingLabels: string[],
   preserveLabel?: string
 ): string[] {
@@ -159,8 +165,8 @@ export function cleanAgregarrCollectionLabels(
 
   // Filter out Posterarr labels, but preserve the specified label if provided
   return existingLabels.filter((label: string) => {
-    const isAgregarrLabel = label.toLowerCase().startsWith('agregarr');
-    if (!isAgregarrLabel) return true; // Keep non-Agregarr labels
+    const isPosterarrLabel = isManagedLabel(label);
+    if (!isPosterarrLabel) return true; // Keep non-Posterarr labels
     if (preserveLabel && label === preserveLabel) return true; // Keep specified label
     return false; // Remove other Posterarr labels
   });
@@ -230,15 +236,13 @@ export async function cleanupOrphanedCollections(
         // Check if collection has user-specific labels
         if (collection.labels && collection.labels.length > 0) {
           // Look for Posterarr user-specific labels
-          const agregarrUserLabels = collection.labels.filter(
-            (label: string) =>
-              label.toLowerCase().startsWith('agregarr') &&
-              label.includes('user-')
+          const posterarrUserLabels = collection.labels.filter(
+            (label: string) => isManagedLabel(label) && label.includes('user-')
           );
 
-          if (agregarrUserLabels.length > 0) {
-            // Extract user ID from label format: "agregarr-user-{plexId}"
-            const userIdMatches = agregarrUserLabels[0].match(/user-(\d+)/);
+          if (posterarrUserLabels.length > 0) {
+            // Extract user ID from label format: "posterarr-user-{plexId}"
+            const userIdMatches = posterarrUserLabels[0].match(/user-(\d+)/);
             if (userIdMatches) {
               const userPlexId = parseInt(userIdMatches[1]);
 
@@ -308,7 +312,7 @@ export function createCollectionLabel(
   configId: string,
   userId?: number
 ): string {
-  const baseParts = ['Agregarr', source, configId.toString()];
+  const baseParts = [LABEL_PREFIX, source, configId.toString()];
 
   if (userId !== undefined) {
     baseParts.push('user', userId.toString());
@@ -326,7 +330,10 @@ export function parseConfigIdFromLabel(label: string): string | null {
   // Source can contain hyphens/underscores (e.g., multi-source, filtered_hub)
   // ConfigId starts with a digit (numeric ID or UUID)
   const match = label.match(
-    /^Agregarr([A-Za-z]+(?:[-_][A-Za-z]+)*)([0-9][a-f0-9-]*)(?:user\d+)?$/i
+    new RegExp(
+      `^${LABEL_PREFIX_PATTERN}([A-Za-z]+(?:[-_][A-Za-z]+)*)([0-9][a-f0-9-]*)(?:user\\d+)?$`,
+      'i'
+    )
   );
   return match ? match[2] : null;
 }
@@ -335,7 +342,7 @@ export function parseConfigIdFromLabel(label: string): string | null {
  * Find collection by config ID in Plex collections using multiple matching strategies
  * 1. First tries to match by ratingKey (fastest)
  * 2. Falls back to matching by config ID in labels
- * 3. Final fallback: exact name matching (only for Agregarr-labeled collections)
+ * 3. Final fallback: exact name matching (only for Posterarr-labeled collections)
  */
 export function findCollectionByConfigId(
   configId: string,
@@ -361,7 +368,9 @@ export function findCollectionByConfigId(
       if (!collection.labels) return false;
       return collection.labels.some((label) => {
         const labelText = typeof label === 'string' ? label : label.tag;
-        return labelText.match(/^AgregarrOverseerrUser\d+$/i);
+        return labelText.match(
+          new RegExp(`^${LABEL_PREFIX_PATTERN}OverseerrUser\\d+$`, 'i')
+        );
       });
     });
 
@@ -384,9 +393,12 @@ export function findCollectionByConfigId(
       if (!collection.labels) return false;
       return collection.labels.some((label) => {
         const labelText = typeof label === 'string' ? label : label.tag;
-        // Match pattern: AgregarrAutoFranchise-{configId}-{franchiseId}
+        // Match pattern: PosterarrAutoFranchise-{configId}-{franchiseId}
         return labelText.match(
-          new RegExp(`^AgregarrAutoFranchise-${configId}-\\d+$`, 'i')
+          new RegExp(
+            `^${LABEL_PREFIX_PATTERN}AutoFranchise-${configId}-\\d+$`,
+            'i'
+          )
         );
       });
     });
@@ -407,17 +419,16 @@ export function findCollectionByConfigId(
     configType === 'plex' &&
     (configSubtype === 'directors' || configSubtype === 'actors')
   ) {
-    const prefix = `AgregarrAuto${
+    const prefix = `${LABEL_PREFIX}Auto${
       configSubtype === 'actors' ? 'Actor' : 'Director'
-    }-${configId}-`.toLowerCase();
+    }-${configId}-`;
 
     const hasPersonCollections = allCollections.some((collection) => {
       if (!collection.labels) return false;
       return collection.labels.some((label) => {
         const labelText = typeof label === 'string' ? label : label.tag;
         if (!labelText) return false;
-        const normalized = labelText.toLowerCase();
-        return normalized.startsWith(prefix);
+        return startsWithManaged(labelText, prefix);
       });
     });
 
@@ -454,7 +465,7 @@ export function findCollectionByConfigId(
     return hasMatchingLabel;
   });
 
-  // Third fallback: name matching for Agregarr-labeled collections (only if label matching failed)
+  // Third fallback: name matching for Posterarr-labeled collections (only if label matching failed)
   if (!foundByLabel && configName && configLibraryId) {
     const matchingCollections = allCollections.filter((collection) => {
       // Must be in the same library
@@ -500,13 +511,13 @@ export function findCollectionByConfigId(
     const matchingCollection = matchingCollections[0];
 
     // Check if this collection has Posterarr labels (indicates it was managed by us)
-    const hasAgregarrLabels = matchingCollection.labels?.some((label) => {
+    const hasPosterarrLabels = matchingCollection.labels?.some((label) => {
       const labelText = typeof label === 'string' ? label : label.tag;
-      return labelText.toLowerCase().startsWith('agregarr');
+      return isManagedLabel(labelText);
     });
 
     // Only proceed if it has Posterarr labels (safety check to avoid matching unrelated collections)
-    if (hasAgregarrLabels) {
+    if (hasPosterarrLabels) {
       return true;
     } else {
       return false;
@@ -627,12 +638,12 @@ export async function syncConfigsWithPlexCollections(
           }
 
           // Must have Posterarr labels (safety check - consistent with discovery)
-          const hasAgregarrLabels = collection.labels?.some((label) => {
+          const hasPosterarrLabels = collection.labels?.some((label) => {
             const labelText = typeof label === 'string' ? label : label.tag;
-            return labelText.toLowerCase().startsWith('agregarr');
+            return isManagedLabel(labelText);
           });
 
-          if (!hasAgregarrLabels) return false;
+          if (!hasPosterarrLabels) return false;
 
           // Try exact name match first
           if (collection.title === config.name) return true;
@@ -697,15 +708,15 @@ export async function syncConfigsWithPlexCollections(
       }
 
       // Check if this collection has an Posterarr label already (safety check)
-      const existingAgregarrLabels =
+      const existingPosterarrLabels =
         matchingCollection.labels?.filter((label) => {
           const labelText = typeof label === 'string' ? label : label.tag;
-          return labelText.toLowerCase().startsWith('agregarr');
+          return isManagedLabel(labelText);
         }) || [];
 
       // Safety check: Only sync collections that already have Posterarr labels
       // This prevents accidentally taking over unrelated user collections
-      if (existingAgregarrLabels.length === 0) {
+      if (existingPosterarrLabels.length === 0) {
         logger.debug(
           `Skipping collection "${matchingCollection.title}" - no existing Posterarr labels found (safety check)`,
           {
@@ -720,7 +731,7 @@ export async function syncConfigsWithPlexCollections(
       }
 
       // Skip Overseerr collections - they manage their own specialized labels
-      // (AgregarrOverseerrUser${userId}, AgregarrOverseerrOwner${userId}, etc.)
+      // (PosterarrOverseerrUser${userId}, PosterarrOverseerrOwner${userId}, etc.)
       if (config.source === 'overseerr') {
         overseerrSkipped++;
         continue;

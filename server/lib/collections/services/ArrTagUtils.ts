@@ -1,5 +1,6 @@
 import RadarrAPI from '@server/api/servarr/radarr';
 import SonarrAPI from '@server/api/servarr/sonarr';
+import { LABEL_PREFIX } from '@server/lib/collections/core/labelPrefix';
 import type {
   CollectionConfig,
   RadarrSettings,
@@ -97,7 +98,7 @@ export function generateCollectionTag(
     return null;
   }
 
-  const baseTag = 'agregarr';
+  const baseTag = LABEL_PREFIX.toLowerCase();
 
   if (resolvedMode === 'single') {
     return baseTag;

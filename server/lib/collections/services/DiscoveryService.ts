@@ -1,5 +1,9 @@
 import type PlexAPI from '@server/api/plexapi';
 import type { PlexLibrary } from '@server/api/plexapi';
+import {
+  isManagedLabel,
+  LABEL_PREFIX_PATTERN,
+} from '@server/lib/collections/core/labelPrefix';
 import type { PlexCollection } from '@server/lib/collections/core/types';
 import {
   categorizeDiscoveredItem,
@@ -532,7 +536,7 @@ export class DiscoveryService {
     let foundByLabel = 0;
     let foundByName = 0;
 
-    // Validate Agregarr-created collections
+    // Validate Posterarr-created collections
     for (const config of collectionConfigs) {
       // Skip missing item check if collection is inactive AND set to be removed from Plex when inactive
       const shouldSkipMissingCheck =
@@ -747,7 +751,7 @@ export class DiscoveryService {
     repairedHubNamesCounter: { count: number }
   ): Promise<void> {
     // Counters for summary logging
-    let skippedAgregarrCollections = 0;
+    let skippedPosterarrCollections = 0;
     let processedHubs = 0;
     const processedPreExisting = 0;
 
@@ -959,9 +963,9 @@ export class DiscoveryService {
             );
 
             if (matchingCollectionConfig) {
-              // This is an Agregarr-created collection that's been promoted to hub - skip it
+              // This is an Posterarr-created collection that's been promoted to hub - skip it
               // (it's already managed via collectionConfigs, promotion status is calculated)
-              skippedAgregarrCollections++;
+              skippedPosterarrCollections++;
             } else {
               // Check if this is an Overseerr user collection by finding it in allCollections
               const collectionWithLabels = allCollections.find(
@@ -970,7 +974,7 @@ export class DiscoveryService {
 
               if (
                 collectionWithLabels &&
-                this.isAgregarrManagedCollection(collectionWithLabels)
+                this.isPosterarrManagedCollection(collectionWithLabels)
               ) {
                 // Skip smart collections - they are managed separately and shouldn't be deleted here
                 // EXCEPT for recently_added type - that IS a smart collection and should be subject to cleanup
@@ -981,7 +985,9 @@ export class DiscoveryService {
                   collectionWithLabels.labels?.some((label) => {
                     const labelText =
                       typeof label === 'string' ? label : label.tag;
-                    const match = labelText.match(/Agregarr-([^-]+)-(.+)/);
+                    const match = labelText.match(
+                      new RegExp(`${LABEL_PREFIX_PATTERN}-([^-]+)-(.+)`)
+                    );
                     if (match) {
                       const [, type] = match;
                       return type === 'recently_added';
@@ -1001,17 +1007,17 @@ export class DiscoveryService {
                   continue;
                 }
 
-                // This is an Agregarr-managed collection - check visibility
+                // This is an Posterarr-managed collection - check visibility
                 const hasVisibility =
                   hub.promotedToSharedHome ||
                   hub.promotedToOwnHome ||
                   hub.promotedToRecommended;
 
                 if (!hasVisibility) {
-                  // Delete Agregarr-managed collection with no visibility
+                  // Delete Posterarr-managed collection with no visibility
                   try {
                     logger.debug(
-                      'Deleting Agregarr-managed collection with no visibility',
+                      'Deleting Posterarr-managed collection with no visibility',
                       {
                         label: 'Discovery Service - Cleanup',
                         libraryId: library.key,
@@ -1022,7 +1028,7 @@ export class DiscoveryService {
                     );
                     await plexClient.deleteHubItem(library.key, hub.identifier);
                     logger.info(
-                      `Deleted Agregarr-managed collection: ${hub.title}`,
+                      `Deleted Posterarr-managed collection: ${hub.title}`,
                       {
                         label: 'Discovery Service - Cleanup',
                         libraryId: library.key,
@@ -1031,7 +1037,7 @@ export class DiscoveryService {
                     );
                   } catch (error) {
                     logger.warn(
-                      'Failed to delete Agregarr-managed collection',
+                      'Failed to delete Posterarr-managed collection',
                       {
                         label: 'Discovery Service - Cleanup',
                         libraryId: library.key,
@@ -1047,7 +1053,7 @@ export class DiscoveryService {
                 } else {
                   // Has visibility - skip from discovery but leave in Plex
                   logger.debug(
-                    `Skipping visible Agregarr-managed collection from hub discovery: ${hubConfig.name}`,
+                    `Skipping visible Posterarr-managed collection from hub discovery: ${hubConfig.name}`,
                     {
                       label: 'Discovery Service',
                       ratingKey: parsedHub.ratingKey,
@@ -1248,16 +1254,16 @@ export class DiscoveryService {
 
     // Summary logging for hub discovery operations
     if (
-      skippedAgregarrCollections > 0 ||
+      skippedPosterarrCollections > 0 ||
       processedHubs > 0 ||
       processedPreExisting > 0
     ) {
       logger.info('Hub discovery completed', {
         label: 'Hub Discovery',
-        summary: `Processed ${processedHubs} hubs, ${processedPreExisting} pre-existing collections, skipped ${skippedAgregarrCollections} Posterarr collections`,
+        summary: `Processed ${processedHubs} hubs, ${processedPreExisting} pre-existing collections, skipped ${skippedPosterarrCollections} Posterarr collections`,
         processedHubs,
         processedPreExisting,
-        skippedAgregarrCollections,
+        skippedPosterarrCollections,
       });
     }
   }
@@ -1352,7 +1358,7 @@ export class DiscoveryService {
     const posterDiscoveryStats = {
       successful: 0,
       failed: 0,
-      agregarrSkipped: 0,
+      posterarrSkipped: 0,
       managedSkipped: 0,
     };
 
@@ -1373,13 +1379,13 @@ export class DiscoveryService {
             config.libraryId === libraryId
         );
 
-        const isAgregarrManaged =
+        const isPosterarrManaged =
           matchingCollectionConfig ||
-          this.isAgregarrManagedCollection(collection);
+          this.isPosterarrManagedCollection(collection);
 
-        // Only discover and store posters for non-Agregarr collections
-        // Agregarr-managed collections already have their posters handled
-        if (!isAgregarrManaged) {
+        // Only discover and store posters for non-Posterarr collections
+        // Posterarr-managed collections already have their posters handled
+        if (!isPosterarrManaged) {
           const posterResult = await this.discoverCollectionPoster(
             plexClient,
             collection,
@@ -1394,15 +1400,15 @@ export class DiscoveryService {
             posterDiscoveryStats.failed++;
           }
         } else if (matchingCollectionConfig) {
-          // This is an Agregarr-created collection - skip poster discovery
-          posterDiscoveryStats.agregarrSkipped++;
+          // This is an Posterarr-created collection - skip poster discovery
+          posterDiscoveryStats.posterarrSkipped++;
         } else {
-          // This is any other Agregarr-managed collection - skip poster discovery
+          // This is any other Posterarr-managed collection - skip poster discovery
           posterDiscoveryStats.managedSkipped++;
         }
 
-        // Process pre-existing collections (non-Agregarr only)
-        if (!isAgregarrManaged) {
+        // Process pre-existing collections (non-Posterarr only)
+        if (!isPosterarrManaged) {
           // Check if this is an existing pre-existing collection that needs title update
           const settings = getSettings();
           const existingPreExisting =
@@ -1532,17 +1538,17 @@ export class DiscoveryService {
       const totalProcessed =
         posterDiscoveryStats.successful + posterDiscoveryStats.failed;
       const totalSkipped =
-        posterDiscoveryStats.agregarrSkipped +
+        posterDiscoveryStats.posterarrSkipped +
         posterDiscoveryStats.managedSkipped;
 
       if (totalProcessed > 0 || totalSkipped > 0) {
         logger.info(
-          `Poster discovery completed: ${posterDiscoveryStats.successful} stored, ${posterDiscoveryStats.failed} failed, ${totalSkipped} skipped (${posterDiscoveryStats.agregarrSkipped} Posterarr, ${posterDiscoveryStats.managedSkipped} managed)`,
+          `Poster discovery completed: ${posterDiscoveryStats.successful} stored, ${posterDiscoveryStats.failed} failed, ${totalSkipped} skipped (${posterDiscoveryStats.posterarrSkipped} Posterarr, ${posterDiscoveryStats.managedSkipped} managed)`,
           {
             label: 'Poster Discovery',
             successful: posterDiscoveryStats.successful,
             failed: posterDiscoveryStats.failed,
-            agregarrSkipped: posterDiscoveryStats.agregarrSkipped,
+            posterarrSkipped: posterDiscoveryStats.posterarrSkipped,
             managedSkipped: posterDiscoveryStats.managedSkipped,
             totalProcessed,
             totalSkipped,
@@ -1784,7 +1790,9 @@ export class DiscoveryService {
       collection.labels?.some(
         (label) =>
           typeof label === 'string' &&
-          label.match(/^AgregarrOverseerrUser\d+$/i)
+          label.match(
+            new RegExp(`^${LABEL_PREFIX_PATTERN}OverseerrUser\\d+$`, 'i')
+          )
       ) || false
     );
   }
@@ -1793,12 +1801,12 @@ export class DiscoveryService {
    * Check if a collection is managed by Posterarr and should be filtered from discovery
    * This includes any collection with Posterarr labels (not just Overseerr user collections)
    */
-  private isAgregarrManagedCollection(collection: PlexCollection): boolean {
+  private isPosterarrManagedCollection(collection: PlexCollection): boolean {
     return (
       collection.labels?.some((label) => {
         const labelText =
           typeof label === 'string' ? label : (label as { tag: string }).tag;
-        return labelText.toLowerCase().startsWith('agregarr');
+        return isManagedLabel(labelText);
       }) || false
     );
   }
@@ -2199,7 +2207,7 @@ export class DiscoveryService {
         }
       }
 
-      // Check pre-existing collection configs (non-Agregarr collections)
+      // Check pre-existing collection configs (non-Posterarr collections)
       const preExistingConfigs =
         settings.plex.preExistingCollectionConfigs || [];
       for (const config of preExistingConfigs) {
@@ -2405,21 +2413,26 @@ export class DiscoveryService {
       const labelText = typeof label === 'string' ? label : label.tag;
 
       // Look for Posterarr labels with config IDs
-      if (labelText.toLowerCase().startsWith('agregarr')) {
+      if (isManagedLabel(labelText)) {
         // Extract potential config ID from label
-        const configIdMatch = labelText.match(/agregarr[^0-9]*(\d+)/i);
+        const configIdMatch = labelText.match(
+          new RegExp(`${LABEL_PREFIX_PATTERN}[^0-9]*(\\d+)`, 'i')
+        );
         if (configIdMatch) {
           const configId = configIdMatch[1];
           const libraryIdKey = `${libraryId}:${configId}`;
 
           if (existingCollectionIds.has(libraryIdKey)) {
-            logger.debug('Found existing Posterarr collection via label match', {
-              label: 'Discovery Service - Duplicate Detection',
-              collectionName: collection.title,
-              libraryId,
-              configId,
-              labelText,
-            });
+            logger.debug(
+              'Found existing Posterarr collection via label match',
+              {
+                label: 'Discovery Service - Duplicate Detection',
+                collectionName: collection.title,
+                libraryId,
+                configId,
+                labelText,
+              }
+            );
             return true;
           }
         }

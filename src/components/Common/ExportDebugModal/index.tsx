@@ -73,7 +73,7 @@ const ExportDebugModal: React.FC<ExportDebugModalProps> = ({
 
       // Get filename from content-disposition header or use default
       const contentDisposition = response.headers['content-disposition'];
-      let filename = 'agregarr-debug.zip';
+      let filename = 'posterarr-debug.zip';
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="(.+)"/);
         if (filenameMatch) {

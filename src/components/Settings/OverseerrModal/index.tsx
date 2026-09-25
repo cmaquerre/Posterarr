@@ -69,9 +69,9 @@ const messages = defineMessages({
   defaultTvRootFolder: 'Default TV Root Folder',
   defaultRootFolderForTvShowRequests:
     'Default root folder for TV show requests',
-  singleUser: 'Single user (Agregarr)',
-  perService: 'Per service (TraktAgregarr, TMDbAgregarr)',
-  granular: 'Granular (TraktTrendingAgregarr, TMDbPopularAgregarr)',
+  singleUser: 'Single user (Posterarr)',
+  perService: 'Per service (TraktPosterarr, TMDbPosterarr)',
+  granular: 'Granular (TraktTrendingPosterarr, TMDbPopularPosterarr)',
 });
 
 interface TestResponse {

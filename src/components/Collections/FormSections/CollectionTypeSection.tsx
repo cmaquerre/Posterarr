@@ -1,6 +1,5 @@
 import type { CollectionFormConfig } from '@app/types/collections';
 import { validateApiKeysForCollectionType } from '@app/utils/apiKeyValidation';
-import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import type {
   MainSettings,
   MDBListSettings,
@@ -33,7 +32,6 @@ const messages = defineMessages({
   selectSubtype: 'Select sub-type...',
   comingSoonVolumesWarning:
     'Coming Soon requires media volume mounts for placeholder creation',
-  seeSetupGuide: 'See setup guide',
   minimumItems: 'Minimum Items',
   minimumItemsHelp:
     'Only create if this person has at least this many items (default: 5, minimum allowed: 2)',
@@ -581,20 +579,7 @@ const CollectionTypeSection = ({
       {/* Coming Soon Volume Info - appears when type='comingsoon' is selected */}
       {values.type === 'comingsoon' && (
         <Alert
-          title={
-            <>
-              {intl.formatMessage(messages.comingSoonVolumesWarning)} -{' '}
-              <a
-                href="https://agregarr.org/docs/coming-soon-volumes"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-400"
-              >
-                {intl.formatMessage(messages.seeSetupGuide)}
-                <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-              </a>
-            </>
-          }
+          title={intl.formatMessage(messages.comingSoonVolumesWarning)}
           type="info"
         />
       )}

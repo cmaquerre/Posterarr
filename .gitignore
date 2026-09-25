@@ -96,3 +96,9 @@ config/cache
 # Claude
 .claude
 CLAUDE.md
+
+# local dev log
+dev.log
+
+# docker compose variables (host paths)
+.env

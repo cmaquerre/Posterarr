@@ -38,7 +38,7 @@ const useCollectionName = (
     s.rules.some((r) => r.field === 'collection')
   );
 
-  const { data: agregarrCollections } = useSWR<{
+  const { data: posterarrCollections } = useSWR<{
     collectionConfigs: { id: string; name: string }[];
   }>(hasCollectionRules ? '/api/v1/collections' : null, (url) =>
     fetch(url).then((res) => res.json())
@@ -51,8 +51,8 @@ const useCollectionName = (
   );
 
   const nameMap = new Map<string, string>();
-  if (agregarrCollections?.collectionConfigs) {
-    for (const c of agregarrCollections.collectionConfigs) {
+  if (posterarrCollections?.collectionConfigs) {
+    for (const c of posterarrCollections.collectionConfigs) {
       nameMap.set(c.id, c.name);
     }
   }

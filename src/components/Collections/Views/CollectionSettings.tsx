@@ -756,7 +756,7 @@ const CollectionSettings = ({
     // For linked collections, we want them to show as normal editable collections (not preexisting)
     const editConfig = {
       ...configToEdit,
-      isAgregarrManaged: true, // All our collections are managed by Posterarr
+      isPosterarrManaged: true, // All our collections are managed by Posterarr
     };
 
     setEditingConfig(editConfig);

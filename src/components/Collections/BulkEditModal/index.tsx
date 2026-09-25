@@ -34,7 +34,7 @@ const messages = defineMessages({
   errorToast: 'Failed to update {name}: {error}',
   allTypes: 'All Types',
   allLibraries: 'All Libraries',
-  agregarrCollections: 'Posterarr Collections',
+  posterarrCollections: 'Posterarr Collections',
   plexHubs: 'Plex Hubs',
   preExistingCollections: 'Pre-existing Collections',
   collectionName: 'Collection Name',
@@ -138,7 +138,7 @@ const BulkEditModal: React.FC<BulkEditModalProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Filter and sort state - default to Posterarr collections
-  const [filterType, setFilterType] = useState<string>('agregarr');
+  const [filterType, setFilterType] = useState<string>('posterarr');
   const [filterLibrary, setFilterLibrary] = useState<string>('all');
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -183,7 +183,7 @@ const BulkEditModal: React.FC<BulkEditModalProps> = ({
         id: `collection-${config.id}`,
         name: config.name,
         type: 'collection',
-        collectionType: CollectionType.AGREGARR_CREATED,
+        collectionType: CollectionType.POSTERARR_CREATED,
         libraryName: config.libraryName,
         libraryId: config.libraryId,
         visibilityConfig: config.visibilityConfig,
@@ -256,7 +256,7 @@ const BulkEditModal: React.FC<BulkEditModalProps> = ({
     // Apply type filter
     if (filterType !== 'all') {
       filtered = filtered.filter((c) => {
-        if (filterType === 'agregarr') return c.type === 'collection';
+        if (filterType === 'posterarr') return c.type === 'collection';
         if (filterType === 'hub') return c.type === 'hub';
         if (filterType === 'preexisting') return c.type === 'preExisting';
         return true;
@@ -791,8 +791,8 @@ const BulkEditModal: React.FC<BulkEditModalProps> = ({
               <option value="all">
                 {intl.formatMessage(messages.allTypes)}
               </option>
-              <option value="agregarr">
-                {intl.formatMessage(messages.agregarrCollections)}
+              <option value="posterarr">
+                {intl.formatMessage(messages.posterarrCollections)}
               </option>
               <option value="hub">
                 {intl.formatMessage(messages.plexHubs)}

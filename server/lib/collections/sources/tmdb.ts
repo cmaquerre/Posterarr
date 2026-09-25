@@ -7,6 +7,7 @@ import {
   processMissingItemsWithMode,
   type LibraryItemsCache,
 } from '@server/lib/collections/core/CollectionUtilities';
+import { LABEL_PREFIX } from '@server/lib/collections/core/labelPrefix';
 import type {
   CollectionItem,
   CollectionSyncOptions,
@@ -1693,9 +1694,9 @@ export class TmdbCollectionSync extends BaseCollectionSync<'tmdb'> {
     );
 
     // Create label for tracking auto-managed franchise collections
-    // Format: AgregarrAutoFranchise-{configId}-{franchiseId}
+    // Format: PosterarrAutoFranchise-{configId}-{franchiseId}
     // This allows us to distinguish auto-managed from manually-created collections
-    const customLabel = `AgregarrAutoFranchise-${config.id}-${franchiseData.franchiseId}`;
+    const customLabel = `${LABEL_PREFIX}AutoFranchise-${config.id}-${franchiseData.franchiseId}`;
 
     logger.debug(`Processing franchise: ${collectionName}`, {
       label: 'TMDB Franchise',

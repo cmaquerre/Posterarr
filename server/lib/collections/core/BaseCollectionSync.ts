@@ -65,6 +65,12 @@ interface MediaProcessingResult {
 }
 // CollectionUpdateStrategy removed - logic moved inline below
 import type { PlexCollectionItem } from '@server/api/plexapi';
+import {
+  removeItemLabelFromLibrary,
+  unwatchedLabel,
+  updateStaleLabels,
+} from './itemLabels';
+import { equalsManaged, isManagedLabel, toLegacyLabel } from './labelPrefix';
 
 // Types moved from CollectionUpdateStrategy.ts
 interface CollectionUpdateOptions {
@@ -1190,7 +1196,7 @@ export abstract class BaseCollectionSync<TSource extends CollectionSource>
 
     if (shouldCreateSmartCollection && options.config) {
       // PATH A: Create label-based smart collection (unwatched items only)
-      const labelName = `agregarr-unwatched-${options.config.id}`;
+      const labelName = unwatchedLabel(options.config.id);
       const itemRatingKeys = plexItems.map((item) => item.ratingKey);
 
       logger.info(
@@ -1245,6 +1251,25 @@ export abstract class BaseCollectionSync<TSource extends CollectionSource>
           }
         );
         // Don't fail the sync if label cleanup fails
+      }
+
+      // Drop the label written under the legacy prefix; the smart collection
+      // filter is rewritten to the current label below
+      try {
+        const legacyLabelName = toLegacyLabel(labelName);
+        const legacyLabeledItems = await plexClient.getItemsWithLabel(
+          libraryKey,
+          legacyLabelName
+        );
+        for (const itemKey of legacyLabeledItems) {
+          await plexClient.removeLabelFromItem(itemKey, legacyLabelName);
+        }
+      } catch (error) {
+        logger.warn(`Failed to remove legacy unwatched labels`, {
+          label: 'Collection Sync',
+          collectionName,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
 
       // MIGRATION: Check for old dual-collection system (base + smart collection)
@@ -1429,16 +1454,11 @@ export abstract class BaseCollectionSync<TSource extends CollectionSource>
 
           // Clean up: remove labels from items and delete smart collection
           if (options.config) {
-            const labelName = `agregarr-unwatched-${options.config.id}`;
-            const labeledItems = await plexClient.getItemsWithLabel(
+            await removeItemLabelFromLibrary(
+              plexClient,
               libraryKey,
-              labelName
+              unwatchedLabel(options.config.id)
             );
-            if (labeledItems.length > 0) {
-              for (const itemKey of labeledItems) {
-                await plexClient.removeLabelFromItem(itemKey, labelName);
-              }
-            }
           }
           await plexClient.deleteCollection(existingCollection.ratingKey);
 
@@ -1454,55 +1474,16 @@ export abstract class BaseCollectionSync<TSource extends CollectionSource>
             plexItems
           );
 
-          // Label items that fell out of the collection as stale
-          if (updateResult.removedKeys.length > 0) {
-            for (const removedKey of updateResult.removedKeys) {
-              try {
-                await plexClient.addLabelToItem(removedKey, 'agregarr-stale');
-              } catch (error) {
-                logger.warn(
-                  `Failed to add agregarr-stale label to item ${removedKey}`,
-                  {
-                    label: 'Collection Update',
-                    error:
-                      error instanceof Error ? error.message : String(error),
-                  }
-                );
-              }
-            }
-            logger.info(
-              `Labeled ${updateResult.removedKeys.length} removed items as agregarr-stale in collection ${collectionName}`,
-              { label: 'Collection Update' }
-            );
-          }
-
-          // Clean up stale labels for items still in this collection
-          const currentPlexKeys = new Set(
-            plexItems.map((item) => item.ratingKey)
-          );
-          const staleItems = await plexClient.getItemsWithLabel(
+          // Label items that fell out of the collection as stale, and clear
+          // the label from items that are back in it
+          await updateStaleLabels(
+            plexClient,
             libraryKey,
-            'agregarr-stale'
+            updateResult.removedKeys,
+            new Set(plexItems.map((item) => item.ratingKey)),
+            collectionName,
+            'Collection Update'
           );
-          for (const staleKey of staleItems) {
-            if (currentPlexKeys.has(staleKey)) {
-              try {
-                await plexClient.removeLabelFromItem(
-                  staleKey,
-                  'agregarr-stale'
-                );
-              } catch (error) {
-                logger.warn(
-                  `Failed to remove agregarr-stale label from item ${staleKey}`,
-                  {
-                    label: 'Collection Update',
-                    error:
-                      error instanceof Error ? error.message : String(error),
-                  }
-                );
-              }
-            }
-          }
 
           updated = 1;
         }
@@ -1737,7 +1718,7 @@ export abstract class BaseCollectionSync<TSource extends CollectionSource>
           // Labels can be strings or objects with 'tag' property
           const found = labels.some((label: string | PlexLabel) => {
             const labelText = typeof label === 'string' ? label : label.tag;
-            return labelText === customLabel;
+            return equalsManaged(labelText, customLabel);
           });
 
           return {
@@ -1834,11 +1815,11 @@ export abstract class BaseCollectionSync<TSource extends CollectionSource>
             const labels = result.value.labels;
 
             // Check if this is an orphaned posterarr collection with matching title
-            const hasAgregarrLabel = labels.some((label: string) =>
-              label.toLowerCase().startsWith('agregarr')
+            const hasPosterarrLabel = labels.some((label: string) =>
+              isManagedLabel(label)
             );
 
-            if (collection.title === config.name && hasAgregarrLabel) {
+            if (collection.title === config.name && hasPosterarrLabel) {
               // CRITICAL: Check if this is a smart collection vs base collection
               const isSmartCollection =
                 (collection as PlexCollectionWithSmart).smart === '1';
@@ -1934,7 +1915,7 @@ export abstract class BaseCollectionSync<TSource extends CollectionSource>
       );
     }
 
-    // Update sort title if needed - for Agregarr-created collections
+    // Update sort title if needed - for Posterarr-created collections
     // Find the config to check everLibraryPromoted status
     const settings = getSettings();
     const allConfigs = settings.plex.collectionConfigs || [];

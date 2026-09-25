@@ -152,7 +152,7 @@ class RandomizeHomeOrder {
       // Group items by library - sortOrderHome is per-library
       const itemsByLibrary = new Map<string, CollectionItem[]>();
 
-      // Add Agregarr-created collections (only those positioned on home screen)
+      // Add Posterarr-created collections (only those positioned on home screen)
       if (settings.plex.collectionConfigs) {
         settings.plex.collectionConfigs.forEach((config) => {
           const sortOrder = config.sortOrderHome || 0;

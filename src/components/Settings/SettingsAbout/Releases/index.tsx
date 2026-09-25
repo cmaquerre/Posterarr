@@ -28,7 +28,7 @@ const messages = defineMessages({
 });
 
 const REPO_RELEASE_API =
-  'https://api.github.com/repos/agregarr/agregarr/releases?per_page=20';
+  'https://api.github.com/repos/cmaquerre/agregarr_test/releases?per_page=20';
 
 interface GitHubRelease {
   url: string;

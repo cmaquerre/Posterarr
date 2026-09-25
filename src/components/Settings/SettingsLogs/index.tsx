@@ -36,7 +36,7 @@ import useSWR from 'swr';
 const messages = defineMessages({
   logs: 'Logs',
   logsDescription:
-    'You can also view these logs directly via <code>stdout</code>, or in <code>{appDataPath}/logs/agregarr.log</code>.',
+    'You can also view these logs directly via <code>stdout</code>, or in <code>{appDataPath}/logs/posterarr.log</code>.',
   time: 'Timestamp',
   level: 'Severity',
   label: 'Label',

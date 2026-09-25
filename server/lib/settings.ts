@@ -1,5 +1,6 @@
 import { getRepository } from '@server/datasource';
 import { OverlayLibraryConfig } from '@server/entity/OverlayLibraryConfig';
+import { LEGACY_LABEL_PREFIX } from '@server/lib/collections/core/labelPrefix';
 import { defaultHubConfigService } from '@server/lib/collections/services/DefaultHubConfigService';
 import { preExistingCollectionConfigService } from '@server/lib/collections/services/PreExistingCollectionConfigService';
 import logger from '@server/logger';
@@ -10,7 +11,7 @@ import path from 'path';
 
 export enum CollectionType {
   DEFAULT_PLEX_HUB = 'default_plex_hub', // Built-in Plex algorithmic hubs
-  AGREGARR_CREATED = 'agregarr_created', // Agregarr-managed collections
+  POSTERARR_CREATED = 'posterarr_created', // Posterarr-managed collections
   PRE_EXISTING = 'pre_existing', // Pre-existing Plex collections
 }
 
@@ -474,7 +475,7 @@ export interface PlexSettings {
   useSsl?: boolean;
   libraries: Library[];
   webAppUrl?: string;
-  collectionConfigs?: CollectionConfig[]; // Agregarr-created collections
+  collectionConfigs?: CollectionConfig[]; // Posterarr-created collections
   hubConfigs?: PlexHubConfig[]; // Plex built-in hub configurations
   preExistingCollectionConfigs?: PreExistingCollectionConfig[]; // Pre-existing Plex collections discovered by hub discovery
   autoEmptyTrash?: boolean; // Auto-empty Plex trash after placeholder cleanup (default: true)
@@ -1755,6 +1756,36 @@ class Settings {
 
     this.data.completedMigrations.push(migrationId);
     this.save();
+  }
+
+  /**
+   * Rewrite the collectionType value stored under the legacy name to the
+   * current one
+   */
+  public migrateLegacyCollectionType(): void {
+    const legacyValue = `${LEGACY_LABEL_PREFIX.toLowerCase()}_created`;
+    let migratedCount = 0;
+
+    const migrate = <T extends { collectionType: CollectionType }>(
+      configs: T[] | undefined
+    ): T[] | undefined =>
+      configs?.map((config) => {
+        if ((config.collectionType as string) !== legacyValue) return config;
+        migratedCount++;
+        return { ...config, collectionType: CollectionType.POSTERARR_CREATED };
+      });
+
+    this.data.plex.hubConfigs = migrate(this.data.plex.hubConfigs);
+    this.data.plex.preExistingCollectionConfigs = migrate(
+      this.data.plex.preExistingCollectionConfigs
+    );
+
+    if (migratedCount > 0) {
+      logger.info(`Migrated collectionType on ${migratedCount} config(s)`, {
+        label: 'Settings Migration',
+      });
+      this.save();
+    }
   }
 
   /**

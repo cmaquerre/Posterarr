@@ -142,7 +142,7 @@ export async function discoverPlaceholdersFromMarkers(
 
       const plexItem = plexMatches.get(`${marker.tmdbId}-tv`);
 
-      // Marker file on disk proves this is an Agregarr-created placeholder.
+      // Marker file on disk proves this is an Posterarr-created placeholder.
       // Don't re-verify via isPlaceholderItem — returns false for TV shows
       // when Children metadata is missing from the Plex API response.
       let needsTitleFix = false;
@@ -192,7 +192,7 @@ export async function discoverPlaceholdersFromMarkers(
 
         const plexItem = plexMatches.get(`${dbRecord.tmdbId}-tv`);
 
-        // Marker file on disk proves this is an Agregarr-created placeholder.
+        // Marker file on disk proves this is an Posterarr-created placeholder.
         // Don't re-verify via isPlaceholderItem — returns false for TV shows
         // when Children metadata is missing from the Plex API response.
         // Only *arr download status determines cleanup vs title-fix.

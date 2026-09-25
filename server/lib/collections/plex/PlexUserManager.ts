@@ -3,6 +3,10 @@ import {
   extractErrorMessage,
   getAdminUser,
 } from '@server/lib/collections/core/CollectionUtilities';
+import {
+  LABEL_PREFIX,
+  managedLabelVariants,
+} from '@server/lib/collections/core/labelPrefix';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import xml2js from 'xml2js';
@@ -83,20 +87,20 @@ const sharedServerCache = new Map<string, V2SharedServer[]>();
  * Each filter can be: key=value1,value2|key=value3
  *
  * @param existingFilter The current filter string (already cleaned of old Posterarr labels)
- * @param agregarrLabels Array of Posterarr label names to add to label!= section
+ * @param posterarrLabels Array of Posterarr label names to add to label!= section
  * @returns Complete filter string with Posterarr labels merged in
  */
-function mergeAgregarrLabelsIntoFilter(
+function mergePosterarrLabelsIntoFilter(
   existingFilter: string,
-  agregarrLabels: string[]
+  posterarrLabels: string[]
 ): string {
-  if (agregarrLabels.length === 0) {
+  if (posterarrLabels.length === 0) {
     return existingFilter;
   }
 
   // If no existing filter, just create a simple label!= filter
   if (!existingFilter) {
-    return `label!=${agregarrLabels.join(',')}`;
+    return `label!=${posterarrLabels.join(',')}`;
   }
 
   // Split by & to get individual filter groups
@@ -141,7 +145,7 @@ function mergeAgregarrLabelsIntoFilter(
           : [];
 
         // Merge with Posterarr labels
-        const allLabels = [...existingLabels, ...agregarrLabels];
+        const allLabels = [...existingLabels, ...posterarrLabels];
         return `label!=${allLabels.join(',')}`;
       }
       return part; // Keep non-label!= OR parts unchanged
@@ -152,7 +156,7 @@ function mergeAgregarrLabelsIntoFilter(
     otherGroups.splice(labelNotEqualIndex, 0, mergedLabelGroup);
   } else {
     // No existing label!= group, add one at the end
-    otherGroups.push(`label!=${agregarrLabels.join(',')}`);
+    otherGroups.push(`label!=${posterarrLabels.join(',')}`);
   }
 
   return otherGroups.join('&');
@@ -357,8 +361,10 @@ export async function updateUserFilterSettings(
     const activeOtherUserIds = activeOverseerrUserIds.filter(
       (id) => id !== targetUserPlexId
     );
-    const agregarrLabels = activeOtherUserIds.map(
-      (id) => `AgregarrOverseerrUser${id}`
+    // Both prefixes are excluded so collections still carrying a legacy label
+    // stay hidden until their next sync relabels them
+    const posterarrLabels = activeOtherUserIds.flatMap((id) =>
+      managedLabelVariants(`${LABEL_PREFIX}OverseerrUser${id}`)
     );
 
     // Also exclude server owner collections for non-admin users (if server owner config is active)
@@ -368,21 +374,25 @@ export async function updateUserFilterSettings(
       adminUser?.plexId &&
       adminUser.plexId.toString() !== targetUserPlexId
     ) {
-      agregarrLabels.push(`AgregarrOverseerrOwner${adminUser.plexId}`);
+      posterarrLabels.push(
+        ...managedLabelVariants(
+          `${LABEL_PREFIX}OverseerrOwner${adminUser.plexId}`
+        )
+      );
     }
 
     // Combine filters - merge Posterarr labels into existing filter structure for Movies and TV only
     let finalMovieFilter = cleanedMovieFilter;
     let finalTvFilter = cleanedTvFilter;
 
-    if (agregarrLabels.length > 0) {
-      finalMovieFilter = mergeAgregarrLabelsIntoFilter(
+    if (posterarrLabels.length > 0) {
+      finalMovieFilter = mergePosterarrLabelsIntoFilter(
         cleanedMovieFilter,
-        agregarrLabels
+        posterarrLabels
       );
-      finalTvFilter = mergeAgregarrLabelsIntoFilter(
+      finalTvFilter = mergePosterarrLabelsIntoFilter(
         cleanedTvFilter,
-        agregarrLabels
+        posterarrLabels
       );
     }
 
@@ -813,7 +823,7 @@ export async function applyUserFiltersToAllUsers(
 }
 
 /**
- * Remove all Agregarr-generated filters for a specific user
+ * Remove all Posterarr-generated filters for a specific user
  * Used when cleaning up or resetting user permissions
  */
 export async function clearUserFilters(

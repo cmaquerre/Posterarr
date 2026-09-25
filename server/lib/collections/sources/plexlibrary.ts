@@ -15,6 +15,11 @@ import {
   getCollectionMediaType,
   type LibraryItemsCache,
 } from '@server/lib/collections/core/CollectionUtilities';
+import {
+  LABEL_PREFIX,
+  normalizeManagedLabel,
+  startsWithManaged,
+} from '@server/lib/collections/core/labelPrefix';
 import type {
   CollectionItem,
   CollectionOperationResult,
@@ -59,12 +64,14 @@ export class PlexLibraryCollectionSync extends BaseCollectionSync<'plex'> {
     configId: string
   ): string {
     const labelType =
-      subtype === 'actors' ? 'AgregarrAutoActor' : 'AgregarrAutoDirector';
+      subtype === 'actors'
+        ? `${LABEL_PREFIX}AutoActor`
+        : `${LABEL_PREFIX}AutoDirector`;
     return `${labelType}-${configId}-`;
   }
 
   private getSeparatorLabel(configId: string): string {
-    return `AgregarrPersonSeparator-${configId}`;
+    return `${LABEL_PREFIX}PersonSeparator-${configId}`;
   }
 
   private getSeparatorTitle(config: CollectionConfig): string {
@@ -77,9 +84,8 @@ export class PlexLibraryCollectionSync extends BaseCollectionSync<'plex'> {
   }
 
   private normalizeLabel(label: string | PlexLabel): string {
-    return typeof label === 'string'
-      ? label.toLowerCase()
-      : (label.tag || '').toLowerCase();
+    const text = typeof label === 'string' ? label : label.tag || '';
+    return normalizeManagedLabel(text).toLowerCase();
   }
 
   private buildSeparatorSortTitle(
@@ -943,7 +949,7 @@ export class PlexLibraryCollectionSync extends BaseCollectionSync<'plex'> {
             }
           }
 
-          // Tag collection so discovery recognizes it as Agregarr-managed
+          // Tag collection so discovery recognizes it as Posterarr-managed
           await this.addPersonLabel(
             subtype,
             plexClient,
@@ -1028,8 +1034,7 @@ export class PlexLibraryCollectionSync extends BaseCollectionSync<'plex'> {
         return labels.some((label: string | PlexLabel) => {
           const labelText = typeof label === 'string' ? label : label.tag;
           if (!labelText) return false;
-          const normalized = labelText.toLowerCase();
-          return normalized.startsWith(personLabelPrefix.toLowerCase());
+          return startsWithManaged(labelText, personLabelPrefix);
         });
       });
 

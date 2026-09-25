@@ -99,11 +99,11 @@ class OverlayLibraryService {
     const membershipMap = new Map<string, string[]>();
     const settings = getSettings();
 
-    // Gather all collections with ratingKeys: agregarr-created + pre-existing
+    // Gather all collections with ratingKeys: posterarr-created + pre-existing
     const collectionsToCheck: { id: string; ratingKey: string }[] = [];
 
-    const agregarrConfigs = settings.plex.collectionConfigs || [];
-    for (const config of agregarrConfigs) {
+    const posterarrConfigs = settings.plex.collectionConfigs || [];
+    for (const config of posterarrConfigs) {
       if (config.collectionRatingKey) {
         collectionsToCheck.push({
           id: config.id,
@@ -224,7 +224,12 @@ class OverlayLibraryService {
       }
 
       // Process the library
-      await this.processLibraryOverlays(libraryId, config, checkCancelled, forceResync);
+      await this.processLibraryOverlays(
+        libraryId,
+        config,
+        checkCancelled,
+        forceResync
+      );
       resolveDeferred();
     } catch (error) {
       rejectDeferred(error instanceof Error ? error : new Error(String(error)));
@@ -602,7 +607,10 @@ class OverlayLibraryService {
               const { plexBasePosterManager } = await import(
                 '@server/lib/overlays/PlexBasePosterManager'
               );
-              await plexBasePosterManager.deleteStoredBasePoster(libraryId, ratingKey);
+              await plexBasePosterManager.deleteStoredBasePoster(
+                libraryId,
+                ratingKey
+              );
             }
 
             await this.applyOverlaysToItem(
@@ -1007,7 +1015,10 @@ class OverlayLibraryService {
       // a clean version from TMDB/Plex instead of using a potentially stale
       // (previously-overlaid) cached file.
       if (forceResync) {
-        await plexBasePosterManager.deleteStoredBasePoster(libraryId, item.ratingKey);
+        await plexBasePosterManager.deleteStoredBasePoster(
+          libraryId,
+          item.ratingKey
+        );
       }
 
       let basePosterResult: {
@@ -1281,12 +1292,15 @@ class OverlayLibraryService {
         let seasonLanguageTag = showContext.languageTag;
         try {
           const { getRepository: getRepo } = await import('@server/datasource');
-          const { LanguageTagRecord } = await import('@server/entity/LanguageTagRecord');
+          const { LanguageTagRecord } = await import(
+            '@server/entity/LanguageTagRecord'
+          );
           const seasonRecord = await getRepo(LanguageTagRecord).findOne({
             where: { ratingKey: seasonRatingKey },
           });
           if (seasonRecord?.tag) {
-            seasonLanguageTag = seasonRecord.tag as typeof showContext.languageTag;
+            seasonLanguageTag =
+              seasonRecord.tag as typeof showContext.languageTag;
           }
         } catch {
           // non-fatal — fall back to series-level tag
@@ -1333,14 +1347,16 @@ class OverlayLibraryService {
           context: seasonContext as Record<string, unknown>,
         });
 
-        const seasonMetadata =
-          await metadataService.getItemMetadata(seasonRatingKey);
+        const seasonMetadata = await metadataService.getItemMetadata(
+          seasonRatingKey
+        );
 
         const settings = getSettings();
         const posterSource = settings.overlays?.defaultPosterSource || 'tmdb';
 
-        const currentPosterUrl =
-          await plexApi.getCurrentPosterUrl(seasonRatingKey);
+        const currentPosterUrl = await plexApi.getCurrentPosterUrl(
+          seasonRatingKey
+        );
         const { posterUrlsMatch } = await import(
           '@server/utils/posterUrlHelpers'
         );
@@ -1367,7 +1383,10 @@ class OverlayLibraryService {
 
         // Force resync: delete cached base poster for this season too
         if (forceResync) {
-          await plexBasePosterManager.deleteStoredBasePoster(libraryId, seasonRatingKey);
+          await plexBasePosterManager.deleteStoredBasePoster(
+            libraryId,
+            seasonRatingKey
+          );
         }
 
         // Get season poster buffer
@@ -1439,8 +1458,9 @@ class OverlayLibraryService {
           }
 
           // Record metadata
-          const newPosterUrl =
-            await plexApi.getCurrentPosterUrl(seasonRatingKey);
+          const newPosterUrl = await plexApi.getCurrentPosterUrl(
+            seasonRatingKey
+          );
           if (newPosterUrl) {
             await metadataService.recordOverlayApplicationWithBasePoster(
               seasonRatingKey,
@@ -1460,9 +1480,11 @@ class OverlayLibraryService {
           }
 
           if (templatesApplied > 0) {
-            await plexApi.addLabelToItem(seasonRatingKey, 'Overlay').catch(() => {
-              // Non-fatal
-            });
+            await plexApi
+              .addLabelToItem(seasonRatingKey, 'Overlay')
+              .catch(() => {
+                // Non-fatal
+              });
           }
 
           logger.info('Applied overlays to season', {

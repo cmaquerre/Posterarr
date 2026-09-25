@@ -9,7 +9,7 @@ services:
     environment:
       - CONFIG_DIRECTORY=/app/config
     volumes:
-      - /opt/Arr/agregarr_test:/app/config
+      - ${CONFIG_PATH:-./config}:/app/config
       # Mount your media folders (read-only).
       # Then configure the path mappings in Settings > Media Folders.
       # Format: /host/path:/container/path:ro

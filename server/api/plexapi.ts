@@ -1141,10 +1141,10 @@ class PlexAPI {
 
         // Clean existing Posterarr labels while preserving user's custom labels
         // Only remove OTHER Posterarr labels, not the one we're trying to add
-        const { cleanAgregarrCollectionLabels } = await import(
+        const { cleanPosterarrCollectionLabels } = await import(
           '@server/lib/collections/core/CollectionUtilities'
         );
-        const preservedLabels = cleanAgregarrCollectionLabels(
+        const preservedLabels = cleanPosterarrCollectionLabels(
           existingLabels,
           label
         );
@@ -2319,7 +2319,7 @@ class PlexAPI {
     labelName: string,
     mediaType: 'movie' | 'tv' = 'movie',
     sortOption?: string,
-    agregarrLabel?: string,
+    posterarrLabel?: string,
     maxItems?: number
   ): Promise<string | null> {
     return this.smartCollectionManager.createLabelBasedSmartCollection(
@@ -2328,7 +2328,7 @@ class PlexAPI {
       labelName,
       mediaType,
       sortOption,
-      agregarrLabel,
+      posterarrLabel,
       maxItems
     );
   }

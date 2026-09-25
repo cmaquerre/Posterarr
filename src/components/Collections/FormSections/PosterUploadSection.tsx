@@ -60,7 +60,7 @@ interface PosterUploadSectionProps {
   libraries?: Library[];
   selectedLibraryIds?: string[];
   // Collection type flags
-  isAgregarrCollection?: boolean;
+  isPosterarrCollection?: boolean;
 }
 
 const PosterUploadSection = ({
@@ -70,7 +70,7 @@ const PosterUploadSection = ({
   fieldId = 'customPoster',
   libraries = [],
   selectedLibraryIds = [],
-  isAgregarrCollection = true,
+  isPosterarrCollection = true,
 }: PosterUploadSectionProps) => {
   const intl = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
@@ -116,7 +116,7 @@ const PosterUploadSection = ({
   );
 
   // Auto-poster is available for all collections
-  // Default to true for Agregarr-created collections, false for pre-existing collections
+  // Default to true for Posterarr-created collections, false for pre-existing collections
   // Check both collectionType and configType (for consistency with CollectionConfigForm)
   const isPreExisting =
     values.collectionType === 'pre_existing' ||
@@ -223,7 +223,7 @@ const PosterUploadSection = ({
   return (
     <>
       {/* Auto-poster toggle - only for Posterarr collections */}
-      {isAgregarrCollection && (
+      {isPosterarrCollection && (
         <div className="mb-6">
           <div className="flex items-center">
             <input
@@ -320,7 +320,7 @@ const PosterUploadSection = ({
       )}
 
       {/* TMDB Franchise options + Collection Mode toggle (Coming Soon + TMDB auto_franchise) */}
-      {isAgregarrCollection &&
+      {isPosterarrCollection &&
         ((values.type === 'tmdb' && values.subtype === 'auto_franchise') ||
           values.type === 'comingsoon') && (
           <>
@@ -375,7 +375,7 @@ const PosterUploadSection = ({
         )}
 
       {/* Manual poster uploads - show when auto-poster is disabled OR when not an Posterarr collection */}
-      {(!isAgregarrCollection || !isAutoPosterEnabled) && (
+      {(!isPosterarrCollection || !isAutoPosterEnabled) && (
         <>
           {/* Horizontal library poster uploads */}
           <div className="flex flex-wrap gap-4">

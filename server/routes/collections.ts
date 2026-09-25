@@ -1,6 +1,11 @@
 import PlexAPI from '@server/api/plexapi';
 import { getRepository } from '@server/datasource';
 import { User } from '@server/entity/User';
+import {
+  removeItemLabelFromLibrary,
+  unwatchedLabel,
+} from '@server/lib/collections/core/itemLabels';
+import { isManagedLabel } from '@server/lib/collections/core/labelPrefix';
 import type { PlexCollection } from '@server/lib/collections/core/types';
 import { libraryCacheService } from '@server/lib/collections/services/LibraryCacheService';
 import { PreExistingCollectionConfigService } from '@server/lib/collections/services/PreExistingCollectionConfigService';
@@ -1057,7 +1062,7 @@ collectionsRoutes.delete('/:id', isAuthenticated(), async (req, res) => {
         for (const config of configsToDelete) {
           // Only clean up labels for smart collections (showUnwatchedOnly enabled)
           if (config.showUnwatchedOnly && config.libraryId) {
-            const labelName = `agregarr-unwatched-${config.id}`;
+            const labelName = unwatchedLabel(config.id);
             const libraryId = Array.isArray(config.libraryId)
               ? config.libraryId[0]
               : config.libraryId;
@@ -1072,26 +1077,11 @@ collectionsRoutes.delete('/:id', isAuthenticated(), async (req, res) => {
                 }
               );
 
-              // Get all items with this label
-              const labeledItems = await plexClient.getItemsWithLabel(
+              await removeItemLabelFromLibrary(
+                plexClient,
                 libraryId,
                 labelName
               );
-
-              if (labeledItems.length > 0) {
-                logger.info(
-                  `Removing label from ${labeledItems.length} items`,
-                  {
-                    label: 'Collections API',
-                    configId: config.id,
-                    labelName,
-                    itemCount: labeledItems.length,
-                  }
-                );
-                for (const itemKey of labeledItems) {
-                  await plexClient.removeLabelFromItem(itemKey, labelName);
-                }
-              }
             } catch (error) {
               logger.warn(
                 `Failed to cleanup labels for collection ${config.name}`,
@@ -1638,9 +1628,9 @@ function getNextLinkId(configs: CollectionConfig[]): number {
   // Collect all existing link IDs from ALL collection types
   const allExistingLinkIds: number[] = [];
 
-  // 1. Check Agregarr-created collections
-  const agregarrConfigs = configs || [];
-  agregarrConfigs.forEach((config) => {
+  // 1. Check Posterarr-created collections
+  const posterarrConfigs = configs || [];
+  posterarrConfigs.forEach((config) => {
     if (config.linkId && config.linkId >= 1) {
       allExistingLinkIds.push(config.linkId);
     }
@@ -2133,7 +2123,7 @@ collectionsRoutes.get('/preexisting', isAuthenticated(), async (_req, res) => {
         return !(
           Array.isArray(collection.labels) &&
           collection.labels.some((label: PlexLabel) =>
-            getLabelText(label).toLowerCase().startsWith('agregarr')
+            isManagedLabel(getLabelText(label))
           )
         );
       }

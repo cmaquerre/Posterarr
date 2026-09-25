@@ -4,6 +4,10 @@ import type {
 } from '@server/api/overseerr';
 import OverseerrAPI from '@server/api/overseerr';
 import { extractErrorMessage } from '@server/lib/collections/core/CollectionUtilities';
+import {
+  LABEL_PREFIX,
+  LEGACY_LABEL_PREFIX,
+} from '@server/lib/collections/core/labelPrefix';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 
@@ -235,7 +239,8 @@ export class OverseerrCollectionService {
           if (
             email &&
             email.startsWith('donotchangeme@') &&
-            email.includes('agregarr')
+            (email.includes(LABEL_PREFIX.toLowerCase()) ||
+              email.includes(LEGACY_LABEL_PREFIX.toLowerCase()))
           ) {
             return false;
           }

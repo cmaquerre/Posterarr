@@ -234,7 +234,7 @@ router.post('/poster-template', (req, res) => {
 
     const tempPath = path.join(
       os.tmpdir(),
-      `agregarr-import-${Date.now()}-${Math.random()
+      `posterarr-import-${Date.now()}-${Math.random()
         .toString(36)
         .substring(7)}.zip`
     );
@@ -575,7 +575,7 @@ router.post('/overlay-template', (req, res) => {
 
     const tempPath = path.join(
       os.tmpdir(),
-      `agregarr-overlay-import-${Date.now()}-${Math.random()
+      `posterarr-overlay-import-${Date.now()}-${Math.random()
         .toString(36)
         .substring(7)}.zip`
     );

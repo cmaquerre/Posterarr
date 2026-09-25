@@ -94,7 +94,7 @@ router.get('/status', async (_req, res) => {
   let commitsBehind = 0;
 
   if (currentVersion.startsWith('develop-') && commitTag !== 'local') {
-    const commits = await githubApi.getAgregarrCommits();
+    const commits = await githubApi.getPosterarrCommits();
 
     if (commits.length) {
       const filteredCommits = commits.filter(
@@ -113,7 +113,7 @@ router.get('/status', async (_req, res) => {
       }
     }
   } else if (commitTag !== 'local') {
-    const releases = await githubApi.getAgregarrReleases();
+    const releases = await githubApi.getPosterarrReleases();
 
     if (releases.length) {
       const latestVersion = releases[0];

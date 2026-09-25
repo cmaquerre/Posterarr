@@ -53,7 +53,7 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: Please copy and paste any relevant log output. The logs file can be located in config/logs/agregarr-YYYY-MM-DD. (This will be automatically formatted into code, so no need for backticks.)
+      description: Please copy and paste any relevant log output. The logs file can be located in config/logs/posterarr-YYYY-MM-DD. (This will be automatically formatted into code, so no need for backticks.)
       render: shell
   - type: textarea
     id: additional-context

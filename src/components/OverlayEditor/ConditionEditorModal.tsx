@@ -178,7 +178,7 @@ const RuleItem: React.FC<RuleItemProps> = ({
   );
 
   // Fetch collections for collection field (posterarr + pre-existing)
-  const { data: agregarrCollections } = useSWR<{
+  const { data: posterarrCollections } = useSWR<{
     collectionConfigs: { id: string; name: string; libraryName: string }[];
   }>(isCollectionField ? '/api/v1/collections' : null, (url) =>
     fetch(url).then((res) => res.json())
@@ -199,7 +199,7 @@ const RuleItem: React.FC<RuleItemProps> = ({
 
     const grouped = new Map<string, { value: string; label: string }[]>();
 
-    for (const c of agregarrCollections?.collectionConfigs || []) {
+    for (const c of posterarrCollections?.collectionConfigs || []) {
       const lib = c.libraryName || 'Unknown Library';
       if (!grouped.has(lib)) grouped.set(lib, []);
       grouped.get(lib)?.push({ value: c.id, label: c.name });
@@ -990,7 +990,7 @@ export const ConditionEditorModal: React.FC<ConditionEditorModalProps> = ({
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-4xl rounded-lg bg-stone-800 p-4 shadow-xl ring-1 ring-gray-700">
           {/* Header */}
-          <Dialog.Title className="text-agregarr mb-4 text-2xl font-bold">
+          <Dialog.Title className="text-posterarr mb-4 text-2xl font-bold">
             {intl.formatMessage(messages.title)}
           </Dialog.Title>
 

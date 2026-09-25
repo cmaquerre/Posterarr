@@ -52,15 +52,16 @@ const messages = defineMessages({
   enableTmdbPosterCache: 'Enable TMDB Poster Cache',
   enableTmdbPosterCacheTip:
     'Cache TMDB posters for 7 days to reduce API calls and improve performance (recommended)',
-  resetAgregarr: 'Reset',
-  resetAgregarrDescription:
+  resetPosterarr: 'Reset',
+  resetPosterarrDescription:
     'Remove all Posterarr collections from Plex and clear all user labels.',
   resetButton: 'Reset Collections',
   resetButtonConfirm: 'Are you sure?',
   resetWarning:
     'This action will delete all collections created by Posterarr from your Plex server and clear all Posterarr user labels.',
   resetting: 'Resetting...',
-  toastResetSuccess: 'All Posterarr collections have been removed successfully!',
+  toastResetSuccess:
+    'All Posterarr collections have been removed successfully!',
   toastResetFailure: 'Something went wrong while resetting collections.',
 });
 
@@ -418,10 +419,10 @@ const SettingsMain = () => {
       {/* Reset Section */}
       <div className="mt-8 mb-6">
         <h3 className="heading">
-          {intl.formatMessage(messages.resetAgregarr)}
+          {intl.formatMessage(messages.resetPosterarr)}
         </h3>
         <p className="description">
-          {intl.formatMessage(messages.resetAgregarrDescription)}
+          {intl.formatMessage(messages.resetPosterarrDescription)}
         </p>
       </div>
       <div className="section">

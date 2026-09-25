@@ -1508,7 +1508,9 @@ settingsRoutes.post('/webhook-triggers/regenerate-token', (_req, res) => {
 });
 
 settingsRoutes.get('/webhook-triggers/queue', (_req, res) => {
-  const { overlayTriggerQueue } = require('@server/lib/overlays/OverlayTriggerQueue');
+  const {
+    overlayTriggerQueue,
+  } = require('@server/lib/overlays/OverlayTriggerQueue');
   return res.status(200).json({
     queue: overlayTriggerQueue.getQueueStatus(),
   });
@@ -1572,7 +1574,9 @@ settingsRoutes.post('/language-tagger/run', async (req, res, next) => {
     };
 
     if (!libraryId || !mediaType) {
-      return res.status(400).json({ message: 'libraryId and mediaType are required' });
+      return res
+        .status(400)
+        .json({ message: 'libraryId and mediaType are required' });
     }
 
     const { languageTaggerService } = await import(
@@ -1600,7 +1604,9 @@ settingsRoutes.get('/language-tagger/search', async (req, res, next) => {
   try {
     const { q } = req.query as { q?: string };
     if (!q || q.trim().length < 2) {
-      return res.status(400).json({ message: 'Query must be at least 2 characters' });
+      return res
+        .status(400)
+        .json({ message: 'Query must be at least 2 characters' });
     }
 
     const { languageTaggerService } = await import(
@@ -1619,7 +1625,9 @@ settingsRoutes.get('/language-tagger/search', async (req, res, next) => {
     }>;
 
     const { getRepository: getRepo } = await import('@server/datasource');
-    const { LanguageTagRecord } = await import('@server/entity/LanguageTagRecord');
+    const { LanguageTagRecord } = await import(
+      '@server/entity/LanguageTagRecord'
+    );
 
     const results: Array<{
       ratingKey: string;
@@ -1641,10 +1649,16 @@ settingsRoutes.get('/language-tagger/search', async (req, res, next) => {
           }
         ).plexClient.query<{
           MediaContainer: {
-            Metadata?: Array<{ ratingKey: string; title: string; year?: number }>;
+            Metadata?: Array<{
+              ratingKey: string;
+              title: string;
+              year?: number;
+            }>;
           };
         }>(
-          `/library/sections/${library.key}/all?type=${type}&title=${encodeURIComponent(q.trim())}&limit=5`
+          `/library/sections/${
+            library.key
+          }/all?type=${type}&title=${encodeURIComponent(q.trim())}&limit=5`
         );
 
         for (const item of response?.MediaContainer?.Metadata ?? []) {
@@ -1681,7 +1695,9 @@ settingsRoutes.post('/language-tagger/scan-item', async (req, res, next) => {
     };
 
     if (!ratingKey || !mediaType) {
-      return res.status(400).json({ message: 'ratingKey and mediaType are required' });
+      return res
+        .status(400)
+        .json({ message: 'ratingKey and mediaType are required' });
     }
 
     const { languageTaggerService } = await import(
@@ -1703,18 +1719,32 @@ settingsRoutes.post('/language-tagger/scan-item', async (req, res, next) => {
       : 0;
 
     if (mediaType === 'movie') {
-      await languageTaggerService.tagMovie(ratingKey, metadata.title, tmdbId, plexApi);
+      await languageTaggerService.tagMovie(
+        ratingKey,
+        metadata.title,
+        tmdbId,
+        plexApi
+      );
     } else {
-      await languageTaggerService.tagShow(ratingKey, metadata.title, tmdbId, plexApi);
+      await languageTaggerService.tagShow(
+        ratingKey,
+        metadata.title,
+        tmdbId,
+        plexApi
+      );
     }
 
     const { getRepository: getRepo } = await import('@server/datasource');
-    const { LanguageTagRecord } = await import('@server/entity/LanguageTagRecord');
+    const { LanguageTagRecord } = await import(
+      '@server/entity/LanguageTagRecord'
+    );
     const record = await getRepo(LanguageTagRecord).findOne({
       where: { ratingKey },
     });
 
-    return res.status(200).json({ tag: record?.tag ?? null, title: metadata.title });
+    return res
+      .status(200)
+      .json({ tag: record?.tag ?? null, title: metadata.title });
   } catch (e) {
     return next(e);
   }
@@ -1742,7 +1772,9 @@ settingsRoutes.post('/media-folders', (req, res) => {
 settingsRoutes.get('/tags-overview', async (_req, res, next) => {
   try {
     const { getRepository } = await import('@server/datasource');
-    const { LanguageTagRecord } = await import('@server/entity/LanguageTagRecord');
+    const { LanguageTagRecord } = await import(
+      '@server/entity/LanguageTagRecord'
+    );
     const RadarrAPI = (await import('@server/api/servarr/radarr')).default;
     const SonarrAPI = (await import('@server/api/servarr/sonarr')).default;
     const settings = getSettings();
@@ -1756,19 +1788,34 @@ settingsRoutes.get('/tags-overview', async (_req, res, next) => {
           .filter((s) => s.hostname)
           .map(async (s) => {
             try {
-              const radarr = new RadarrAPI({ apiKey: s.apiKey, url: RadarrAPI.buildUrl(s, '/api/v3') });
-              const [movies, tags] = await Promise.all([radarr.getMovies(), radarr.getTags()]);
+              const radarr = new RadarrAPI({
+                apiKey: s.apiKey,
+                url: RadarrAPI.buildUrl(s, '/api/v3'),
+              });
+              const [movies, tags] = await Promise.all([
+                radarr.getMovies(),
+                radarr.getTags(),
+              ]);
               const tagMap = new Map(tags.map((t) => [t.id, t.label]));
               return movies
                 .filter((m) => m.tmdbId && m.tags?.length)
-                .map((m) => ({ tmdbId: m.tmdbId!, names: m.tags.map((id) => tagMap.get(id) ?? '').filter(Boolean) }));
-            } catch { return []; }
+                .map((m) => ({
+                  tmdbId: m.tmdbId!,
+                  names: m.tags
+                    .map((id) => tagMap.get(id) ?? '')
+                    .filter(Boolean),
+                }));
+            } catch {
+              return [];
+            }
           })
       ).then((results) => {
         const map = new Map<number, string[]>();
         for (const entries of results) {
           for (const { tmdbId, names } of entries) {
-            map.set(tmdbId, [...new Set([...(map.get(tmdbId) ?? []), ...names])]);
+            map.set(tmdbId, [
+              ...new Set([...(map.get(tmdbId) ?? []), ...names]),
+            ]);
           }
         }
         return map;
@@ -1780,19 +1827,34 @@ settingsRoutes.get('/tags-overview', async (_req, res, next) => {
           .filter((s) => s.hostname)
           .map(async (s) => {
             try {
-              const sonarr = new SonarrAPI({ apiKey: s.apiKey, url: SonarrAPI.buildUrl(s, '/api/v3') });
-              const [series, tags] = await Promise.all([sonarr.getSeries(), sonarr.getTags()]);
+              const sonarr = new SonarrAPI({
+                apiKey: s.apiKey,
+                url: SonarrAPI.buildUrl(s, '/api/v3'),
+              });
+              const [series, tags] = await Promise.all([
+                sonarr.getSeries(),
+                sonarr.getTags(),
+              ]);
               const tagMap = new Map(tags.map((t) => [t.id, t.label]));
               return series
                 .filter((sh) => sh.tmdbId && sh.tags?.length)
-                .map((sh) => ({ tmdbId: sh.tmdbId!, names: sh.tags.map((id) => tagMap.get(id) ?? '').filter(Boolean) }));
-            } catch { return []; }
+                .map((sh) => ({
+                  tmdbId: sh.tmdbId!,
+                  names: sh.tags
+                    .map((id) => tagMap.get(id) ?? '')
+                    .filter(Boolean),
+                }));
+            } catch {
+              return [];
+            }
           })
       ).then((results) => {
         const map = new Map<number, string[]>();
         for (const entries of results) {
           for (const { tmdbId, names } of entries) {
-            map.set(tmdbId, [...new Set([...(map.get(tmdbId) ?? []), ...names])]);
+            map.set(tmdbId, [
+              ...new Set([...(map.get(tmdbId) ?? []), ...names]),
+            ]);
           }
         }
         return map;
@@ -1806,8 +1868,8 @@ settingsRoutes.get('/tags-overview', async (_req, res, next) => {
       tmdbId: r.tmdbId ?? null,
       languageTag: r.tag,
       source: r.source ?? null,
-      radarrTags: r.tmdbId ? (radarrTagsByTmdb.get(r.tmdbId) ?? []) : [],
-      sonarrTags: r.tmdbId ? (sonarrTagsByTmdb.get(r.tmdbId) ?? []) : [],
+      radarrTags: r.tmdbId ? radarrTagsByTmdb.get(r.tmdbId) ?? [] : [],
+      sonarrTags: r.tmdbId ? sonarrTagsByTmdb.get(r.tmdbId) ?? [] : [],
       updatedAt: r.updatedAt,
     }));
 
@@ -1831,7 +1893,7 @@ settingsRoutes.post('/export-debug', (req, res, next) => {
 
     // Set response headers for file download
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `agregarr-debug-${timestamp}.zip`;
+    const filename = `posterarr-debug-${timestamp}.zip`;
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 

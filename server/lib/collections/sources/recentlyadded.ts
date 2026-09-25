@@ -20,6 +20,10 @@ import {
   getCollectionMediaType,
   type LibraryItemsCache,
 } from '@server/lib/collections/core/CollectionUtilities';
+import {
+  equalsManaged,
+  LABEL_PREFIX,
+} from '@server/lib/collections/core/labelPrefix';
 import type {
   CollectionItem,
   CollectionOperationResult,
@@ -199,7 +203,7 @@ export class FilteredHubCollectionSync extends BaseCollectionSync<'filtered_hub'
 
     // Check if smart collection already exists
     // Define custom label for this collection
-    const customLabel = `Agregarr-filtered_hub-${config.id}`;
+    const customLabel = `${LABEL_PREFIX}-filtered_hub-${config.id}`;
 
     // Filter collections to only those in the target library
     const libraryCollections = allCollections.filter(
@@ -219,11 +223,11 @@ export class FilteredHubCollectionSync extends BaseCollectionSync<'filtered_hub'
       existingCollection = libraryCollections.find((col) =>
         col.labels?.some(
           (label) =>
-            (typeof label === 'string' && label === customLabel) ||
+            (typeof label === 'string' && equalsManaged(label, customLabel)) ||
             (typeof label === 'object' &&
               label !== null &&
               'tag' in label &&
-              label.tag === customLabel)
+              equalsManaged(label.tag, customLabel))
         )
       );
     }

@@ -1,5 +1,14 @@
 import type PlexAPI from '@server/api/plexapi';
 import type { LibraryItemsCache } from '@server/lib/collections/core/CollectionUtilities';
+import {
+  removeItemLabelFromLibrary,
+  unwatchedLabel,
+  updateStaleLabels,
+} from '@server/lib/collections/core/itemLabels';
+import {
+  LABEL_PREFIX,
+  toLegacyLabel,
+} from '@server/lib/collections/core/labelPrefix';
 import type {
   CollectionItem,
   CollectionSource,
@@ -1410,7 +1419,7 @@ export class MultiSourceOrchestrator {
 
     if (shouldCreateSmartCollection) {
       // PATH A: Create label-based smart collection
-      const labelName = `agregarr-unwatched-${options.config.id}`;
+      const labelName = unwatchedLabel(options.config.id);
       const itemRatingKeys = plexItems.map((item) => item.ratingKey);
 
       logger.info(
@@ -1463,6 +1472,25 @@ export class MultiSourceOrchestrator {
             error: error instanceof Error ? error.message : String(error),
           }
         );
+      }
+
+      // Drop the label written under the legacy prefix; the smart collection
+      // filter is rewritten to the current label below
+      try {
+        const legacyLabelName = toLegacyLabel(labelName);
+        const legacyLabeledItems = await plexClient.getItemsWithLabel(
+          options.libraryKey,
+          legacyLabelName
+        );
+        for (const itemKey of legacyLabeledItems) {
+          await plexClient.removeLabelFromItem(itemKey, legacyLabelName);
+        }
+      } catch (error) {
+        logger.warn(`Failed to remove legacy unwatched labels`, {
+          label: 'Multi-Source Orchestrator',
+          collectionName,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
 
       // MIGRATION: Check for old dual-collection system (base + smart collection)
@@ -1619,7 +1647,9 @@ export class MultiSourceOrchestrator {
 
       if (!collectionRatingKey) {
         // Create new smart collection
-        const customLabel = `agregarr-multisource-${options.config.id}`;
+        const customLabel = `${LABEL_PREFIX.toLowerCase()}-multisource-${
+          options.config.id
+        }`;
         const newSmartCollectionRatingKey =
           await plexClient.createLabelBasedSmartCollection(
             collectionName,
@@ -1663,16 +1693,11 @@ export class MultiSourceOrchestrator {
           );
 
           // Clean up: remove labels from items and delete smart collection
-          const labelName = `agregarr-unwatched-${options.config.id}`;
-          const labeledItems = await plexClient.getItemsWithLabel(
+          await removeItemLabelFromLibrary(
+            plexClient,
             options.libraryKey,
-            labelName
+            unwatchedLabel(options.config.id)
           );
-          if (labeledItems.length > 0) {
-            for (const itemKey of labeledItems) {
-              await plexClient.removeLabelFromItem(itemKey, labelName);
-            }
-          }
           await plexClient.deleteCollection(existingCollection.ratingKey);
 
           // Force creation of regular collection below
@@ -1765,55 +1790,16 @@ export class MultiSourceOrchestrator {
               );
             }
 
-            // Label items that fell out of the collection as stale
-            if (updateResult.removedKeys.length > 0) {
-              for (const removedKey of updateResult.removedKeys) {
-                try {
-                  await plexClient.addLabelToItem(removedKey, 'agregarr-stale');
-                } catch (error) {
-                  logger.warn(
-                    `Failed to add agregarr-stale label to item ${removedKey}`,
-                    {
-                      label: 'Multi-Source Orchestrator',
-                      error:
-                        error instanceof Error ? error.message : String(error),
-                    }
-                  );
-                }
-              }
-              logger.info(
-                `Labeled ${updateResult.removedKeys.length} removed items as agregarr-stale in collection ${collectionName}`,
-                { label: 'Multi-Source Orchestrator' }
-              );
-            }
-
-            // Clean up stale labels for items still in this collection
-            const currentPlexKeys = new Set(
-              plexItems.map((item) => item.ratingKey)
-            );
-            const staleItems = await plexClient.getItemsWithLabel(
+            // Label items that fell out of the collection as stale, and clear
+            // the label from items that are back in it
+            await updateStaleLabels(
+              plexClient,
               options.libraryKey,
-              'agregarr-stale'
+              updateResult.removedKeys,
+              new Set(plexItems.map((item) => item.ratingKey)),
+              collectionName,
+              'Multi-Source Orchestrator'
             );
-            for (const staleKey of staleItems) {
-              if (currentPlexKeys.has(staleKey)) {
-                try {
-                  await plexClient.removeLabelFromItem(
-                    staleKey,
-                    'agregarr-stale'
-                  );
-                } catch (error) {
-                  logger.warn(
-                    `Failed to remove agregarr-stale label from item ${staleKey}`,
-                    {
-                      label: 'Multi-Source Orchestrator',
-                      error:
-                        error instanceof Error ? error.message : String(error),
-                    }
-                  );
-                }
-              }
-            }
 
             updated = 1;
           }

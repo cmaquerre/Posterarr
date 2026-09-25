@@ -1811,7 +1811,7 @@ const CollectionFormConfigForm = ({
           enableCustomTheme:
             (config as CollectionFormConfig).enableCustomTheme ?? false,
           // Default autoPoster to false for pre-existing collections (they have their own posters),
-          // true for Agregarr-created collections
+          // true for Posterarr-created collections
           autoPoster:
             (config as CollectionFormConfig).autoPoster ??
             (isPreExisting ? false : true),
@@ -3462,7 +3462,7 @@ const CollectionFormConfigForm = ({
                                       selectedLibraryIds={
                                         values.libraryIds || []
                                       }
-                                      isAgregarrCollection={isCollection}
+                                      isPosterarrCollection={isCollection}
                                     />
                                   </div>
                                 </div>
@@ -3613,7 +3613,7 @@ const CollectionFormConfigForm = ({
                               </div>
                             </div>
 
-                            {/* Collection Mutual Exclusion - only for Agregarr-created collections */}
+                            {/* Collection Mutual Exclusion - only for Posterarr-created collections */}
                             {isCollection && (
                               <CollectionExclusionSection
                                 values={typedValues as CollectionFormConfig}
@@ -4597,7 +4597,7 @@ const CollectionFormConfigForm = ({
                                       ? [values.libraryId]
                                       : []
                                   }
-                                  isAgregarrCollection={true}
+                                  isPosterarrCollection={true}
                                 />
                               </div>
                             </div>

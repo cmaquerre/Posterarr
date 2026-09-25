@@ -65,6 +65,7 @@ app
 
     // Migrate recently_added to filtered_hub type
     settings.migrateRecentlyAddedToFilteredHub();
+    settings.migrateLegacyCollectionType();
 
     // Migrate old filter format to unified filterSettings with include/exclude modes
     settings.migrateToUnifiedFilterSettings();
@@ -256,7 +257,7 @@ app
         })
       );
       server.use((req, res, next) => {
-        res.cookie('AGREGARR-XSRF-TOKEN', req.csrfToken(), {
+        res.cookie('POSTERARR-XSRF-TOKEN', req.csrfToken(), {
           sameSite: true,
           secure: !dev,
         });
@@ -269,7 +270,7 @@ app
     server.use(
       '/api',
       session({
-        name: 'agregarr.sid', // Unique cookie name to prevent conflicts with Overseerr
+        name: 'posterarr.sid', // Unique cookie name to prevent conflicts with Overseerr
         secret: settings.clientId,
         resave: false,
         saveUninitialized: false,

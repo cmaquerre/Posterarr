@@ -158,7 +158,7 @@ export const useCollectionEdit = () => {
               sortOrderLibrary: hubConfig.sortOrderLibrary,
               visibilityConfig: hubConfig.visibilityConfig,
               isDefaultPlexHub: hubConfig.isDefaultPlexHub,
-              isAgregarrManaged: hubConfig.isAgregarrManaged,
+              isPosterarrManaged: hubConfig.isPosterarrManaged,
               isPromotedToHub: hubConfig.isPromotedToHub,
             };
 

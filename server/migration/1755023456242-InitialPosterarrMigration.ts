@@ -1,9 +1,12 @@
+import { LEGACY_LABEL_PREFIX } from '@server/lib/collections/core/labelPrefix';
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class InitialAgregarrMigration1755023456242
+export class InitialPosterarrMigration1755023456242
   implements MigrationInterface
 {
-  name = 'InitialAgregarrMigration1755023456242';
+  // Name recorded in the migrations table of existing databases; it must stay
+  // unchanged or TypeORM would run this migration again
+  name = `Initial${LEGACY_LABEL_PREFIX}Migration1755023456242`;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(

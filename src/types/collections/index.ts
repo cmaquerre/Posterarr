@@ -6,7 +6,7 @@
 
 export enum CollectionType {
   DEFAULT_PLEX_HUB = 'default_plex_hub', // Built-in Plex algorithmic hubs
-  AGREGARR_CREATED = 'agregarr_created', // Agregarr-managed collections
+  POSTERARR_CREATED = 'posterarr_created', // Posterarr-managed collections
   PRE_EXISTING = 'pre_existing', // Pre-existing Plex collections
 }
 
@@ -860,7 +860,7 @@ export const CollectionFormConfigUtils = {
     // Pre-existing collections cannot be linked - they're existing Plex collections not created by us
     if (CollectionFormConfigUtils.isPreExisting(config)) return false;
 
-    // Allow linking for Agregarr-created collections and default Plex hubs
+    // Allow linking for Posterarr-created collections and default Plex hubs
     return true;
   },
 };

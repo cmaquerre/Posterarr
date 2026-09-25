@@ -22,17 +22,13 @@ import useSWR from 'swr';
 
 const messages = defineMessages({
   about: 'About',
-  agregarrinformation: 'About Posterarr',
+  posterarrinformation: 'About Posterarr',
   version: 'Version',
   gettingsupport: 'Getting Support',
   githubdiscussions: 'GitHub Discussions',
-  agregarrdocs: 'Posterarr Documentation',
   exportdebug: 'Export Debugging Information',
   timezone: 'Time Zone',
   appDataPath: 'Data Directory',
-  supportagregarr: 'Support Posterarr',
-  helppaycoffee: 'Help Pay for Coffee',
-  preferredmethod: 'Preferred',
   outofdate: 'Out of Date',
   uptodate: 'Up to Date',
   betawarning:
@@ -78,7 +74,7 @@ const SettingsAbout = () => {
             </p>
             <p className="mt-3 text-sm leading-5 md:mt-0 md:ml-6">
               <a
-                href="http://github.com/agregarr/agregarr"
+                href="https://github.com/cmaquerre/agregarr_test"
                 className="whitespace-nowrap font-medium text-gray-100 transition duration-150 ease-in-out hover:text-white"
                 target="_blank"
                 rel="noreferrer"
@@ -90,7 +86,7 @@ const SettingsAbout = () => {
         </div>
       </div>
       <div className="section">
-        <List title={intl.formatMessage(messages.agregarrinformation)}>
+        <List title={intl.formatMessage(messages.posterarrinformation)}>
           {data.version.startsWith('develop-') && (
             <Alert
               title={intl.formatMessage(messages.runningDevelop, {
@@ -112,8 +108,8 @@ const SettingsAbout = () => {
                 <a
                   href={
                     data.version.startsWith('develop-')
-                      ? `https://github.com/agregarr/agregarr/compare/${status.commitTag}...develop`
-                      : 'https://github.com/agregarr/agregarr/releases'
+                      ? `https://github.com/cmaquerre/agregarr_test/compare/${status.commitTag}...develop`
+                      : 'https://github.com/cmaquerre/agregarr_test/releases'
                   }
                   target="_blank"
                   rel="noopener noreferrer"
@@ -129,8 +125,8 @@ const SettingsAbout = () => {
                 <a
                   href={
                     data.version.startsWith('develop-')
-                      ? 'https://github.com/agregarr/agregarr/commits/develop'
-                      : 'https://github.com/agregarr/agregarr/releases'
+                      ? 'https://github.com/cmaquerre/agregarr_test/commits/develop'
+                      : 'https://github.com/cmaquerre/agregarr_test/releases'
                   }
                   target="_blank"
                   rel="noopener noreferrer"
@@ -158,32 +154,12 @@ const SettingsAbout = () => {
         <List title={intl.formatMessage(messages.gettingsupport)}>
           <List.Item title={intl.formatMessage(messages.githubdiscussions)}>
             <a
-              href="https://github.com/agregarr/agregarr/discussions"
+              href="https://github.com/cmaquerre/agregarr_test/discussions"
               target="_blank"
               rel="noreferrer"
               className="text-orange-500 transition duration-300 hover:underline"
             >
-              https://github.com/agregarr/agregarr/discussions
-            </a>
-          </List.Item>
-          <List.Item title="Discord">
-            <a
-              href="https://discord.gg/RfEPPRQJQ2"
-              target="_blank"
-              rel="noreferrer"
-              className="text-orange-500 transition duration-300 hover:underline"
-            >
-              https://discord.gg/RfEPPRQJQ2
-            </a>
-          </List.Item>
-          <List.Item title={intl.formatMessage(messages.agregarrdocs)}>
-            <a
-              href="https://agregarr.org"
-              target="_blank"
-              rel="noreferrer"
-              className="text-orange-500 transition duration-300 hover:underline"
-            >
-              https://agregarr.org
+              https://github.com/cmaquerre/agregarr_test/discussions
             </a>
           </List.Item>
           <List.Item title={intl.formatMessage(messages.exportdebug)}>
@@ -194,25 +170,6 @@ const SettingsAbout = () => {
               <ArrowDownTrayIcon className="mr-2 h-5 w-5" />
               {intl.formatMessage(messages.exportDebugInfo)}
             </Button>
-          </List.Item>
-        </List>
-      </div>
-      <div className="section">
-        <List title={intl.formatMessage(messages.supportagregarr)}>
-          <List.Item
-            title={`${intl.formatMessage(messages.helppaycoffee)} ☕️`}
-          >
-            <a
-              href="https://buymeacoffee.com/agregarr"
-              target="_blank"
-              rel="noreferrer"
-              className="text-orange-500 transition duration-300 hover:underline"
-            >
-              https://buymeacoffee.com/agregarr
-            </a>
-            <Badge className="ml-2">
-              {intl.formatMessage(messages.preferredmethod)}
-            </Badge>
           </List.Item>
         </List>
       </div>

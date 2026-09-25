@@ -25,7 +25,7 @@ dashboardRoutes.get('/stats', isAuthenticated(), async (req, res) => {
 
         // Get rating keys from our configured collections
         const collectionRatingKeys: string[] = [];
-        const agregarrCollectionKeys: string[] = [];
+        const posterarrCollectionKeys: string[] = [];
         const preExistingCollectionKeys: string[] = [];
 
         // Include user-created Posterarr collections
@@ -33,7 +33,7 @@ dashboardRoutes.get('/stats', isAuthenticated(), async (req, res) => {
           for (const config of settings.plex.collectionConfigs) {
             if (config.collectionRatingKey) {
               collectionRatingKeys.push(config.collectionRatingKey);
-              agregarrCollectionKeys.push(config.collectionRatingKey);
+              posterarrCollectionKeys.push(config.collectionRatingKey);
             }
           }
         }
@@ -140,16 +140,16 @@ dashboardRoutes.get('/stats', isAuthenticated(), async (req, res) => {
     }
 
     // Get collection configs count
-    const agregarrCollectionCount =
+    const posterarrCollectionCount =
       settings.plex.collectionConfigs?.length || 0;
     const preExistingCollectionCount =
       settings.plex.preExistingCollectionConfigs?.length || 0;
 
     const dashboardData = {
       collections: {
-        posterarr: agregarrCollectionCount,
+        posterarr: posterarrCollectionCount,
         preExisting: preExistingCollectionCount,
-        total: agregarrCollectionCount + preExistingCollectionCount,
+        total: posterarrCollectionCount + preExistingCollectionCount,
         stats: collectionStatsData,
       },
       activity: weeklyStats,
@@ -211,7 +211,7 @@ dashboardRoutes.get('/collections', isAuthenticated(), async (req, res) => {
 
     logger.info('Getting collection statistics', {
       label: 'Dashboard API',
-      agregarrCollections: settings.plex.collectionConfigs?.length || 0,
+      posterarrCollections: settings.plex.collectionConfigs?.length || 0,
       preExistingCollections:
         settings.plex.preExistingCollectionConfigs?.length || 0,
       ratingKeysFound: collectionRatingKeys.length,

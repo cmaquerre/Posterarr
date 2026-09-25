@@ -1,4 +1,11 @@
 import type PlexAPI from '@server/api/plexapi';
+import { unwatchedLabel } from '@server/lib/collections/core/itemLabels';
+import {
+  isManagedLabel,
+  LABEL_PREFIX,
+  LABEL_PREFIX_PATTERN,
+  startsWithManaged,
+} from '@server/lib/collections/core/labelPrefix';
 import type {
   OverseerrUser,
   PlexCollection,
@@ -31,7 +38,7 @@ export class CollectionCleanupService {
    */
   public async cleanupDisabledCollections(
     plexClient: PlexAPI,
-    existingAgregarrCollections: PlexCollection[],
+    existingPosterarrCollections: PlexCollection[],
     currentConfigs: CollectionConfig[],
     userCollections: UserCollections,
     processedCollectionKeys: Set<string>
@@ -46,7 +53,7 @@ export class CollectionCleanupService {
     // Get current user Plex IDs for orphaned user collection cleanup
     const currentUserPlexIds = new Set(Object.keys(userCollections));
 
-    for (const collection of existingAgregarrCollections) {
+    for (const collection of existingPosterarrCollections) {
       if (this.cancelled) break;
 
       try {
@@ -78,7 +85,7 @@ export class CollectionCleanupService {
                       typeof label === 'string' ? label : label.tag
                     )
                     .filter((label: string) =>
-                      label.startsWith('agregarr-unwatched-')
+                      startsWithManaged(label, unwatchedLabel(''))
                     )
                 : [];
 
@@ -180,25 +187,25 @@ export class CollectionCleanupService {
     // 1. DELETE ALL COLLECTIONS with posterarr labels
     try {
       const allCollections = await plexClient.getAllCollections();
-      const agregarrCollections = allCollections.filter(
+      const posterarrCollections = allCollections.filter(
         (collection: PlexCollection) =>
           Array.isArray(collection.labels) &&
           collection.labels.some((label: string | PlexLabel) => {
             const labelText = typeof label === 'string' ? label : label.tag;
-            return labelText.toLowerCase().startsWith('agregarr');
+            return isManagedLabel(labelText);
           })
       );
 
       logger.info(
-        `Found ${agregarrCollections.length} posterarr collections to delete`,
+        `Found ${posterarrCollections.length} posterarr collections to delete`,
         {
           label: 'Collection Cleanup Service',
-          collectionsToDelete: agregarrCollections.length,
+          collectionsToDelete: posterarrCollections.length,
         }
       );
 
       // Delete ALL posterarr collections - no conditions, no user checks
-      for (const collection of agregarrCollections) {
+      for (const collection of posterarrCollections) {
         if (this.cancelled) break;
 
         try {
@@ -215,15 +222,15 @@ export class CollectionCleanupService {
             const libraryId =
               collectionMeta.librarySectionID || collectionMeta.libraryKey;
 
-            // Try to find the agregarr-unwatched label for this collection
-            // Pattern: agregarr-unwatched-{configId}
+            // Try to find the unwatched label for this collection
+            // Pattern: posterarr-unwatched-{configId} (or the legacy prefix)
             const unwatchedLabels = Array.isArray(collectionMeta.labels)
               ? collectionMeta.labels
                   .map((label: string | { tag: string }) =>
                     typeof label === 'string' ? label : label.tag
                   )
                   .filter((label: string) =>
-                    label.startsWith('agregarr-unwatched-')
+                    startsWithManaged(label, unwatchedLabel(''))
                   )
               : [];
 
@@ -292,7 +299,7 @@ export class CollectionCleanupService {
       });
     }
 
-    // 2. CLEAR ALL AGREGARR USER LABELS from all Plex users
+    // 2. CLEAR ALL POSTERARR USER LABELS from all Plex users
     try {
       const { getAllPlexUserIds, clearUserFilters } = await import(
         '@server/lib/collections/plex/PlexUserManager'
@@ -379,12 +386,12 @@ export class CollectionCleanupService {
 
     // Get current collections to track what will be deleted
     const allCollections = await plexClient.getAllCollections();
-    const agregarrCollectionsBefore = allCollections.filter(
+    const posterarrCollectionsBefore = allCollections.filter(
       (collection: PlexCollection) =>
         Array.isArray(collection.labels) &&
         collection.labels.some((label: string | PlexLabel) => {
           const labelText = typeof label === 'string' ? label : label.tag;
-          return labelText.toLowerCase().startsWith('agregarr');
+          return isManagedLabel(labelText);
         })
     );
 
@@ -394,7 +401,7 @@ export class CollectionCleanupService {
     // Delete all Posterarr collections by passing empty config list
     await this.cleanupDisabledCollections(
       plexClient,
-      agregarrCollectionsBefore,
+      posterarrCollectionsBefore,
       [], // Empty configs = delete all
       {}, // Empty user collections
       new Set() // No processed collections
@@ -402,18 +409,18 @@ export class CollectionCleanupService {
 
     // Count what was actually cleaned up
     const allCollectionsAfter = await plexClient.getAllCollections();
-    const agregarrCollectionsAfter = allCollectionsAfter.filter(
+    const posterarrCollectionsAfter = allCollectionsAfter.filter(
       (collection: PlexCollection) =>
         Array.isArray(collection.labels) &&
         collection.labels.some((label: string | PlexLabel) => {
           const labelText = typeof label === 'string' ? label : label.tag;
-          return labelText.toLowerCase().startsWith('agregarr');
+          return isManagedLabel(labelText);
         })
     );
 
     const result = {
       collectionsDeleted:
-        agregarrCollectionsBefore.length - agregarrCollectionsAfter.length,
+        posterarrCollectionsBefore.length - posterarrCollectionsAfter.length,
       usersProcessed: allUsers.length,
       labelsSuccessful: allUsers.length, // Assume all successful since cleanup is robust
       labelsFailed: 0,
@@ -443,9 +450,9 @@ export class CollectionCleanupService {
       switch (c.type) {
         case 'overseerr':
           if (c.subtype === 'users') {
-            labels.push(`AgregarrOverseerrUser`); // Generic for user config type checking
+            labels.push(`${LABEL_PREFIX}OverseerrUser`); // Generic for user config type checking
           } else if (c.subtype === 'global') {
-            labels.push(`AgregarrOverseerrAll${c.id}`);
+            labels.push(`${LABEL_PREFIX}OverseerrAll${c.id}`);
           } else if (c.subtype === 'server_owner') {
             // For server_owner, get the actual admin user plexId to match the real label format
             try {
@@ -455,36 +462,36 @@ export class CollectionCleanupService {
               const adminUser = await overseerrCollectionService.getAdminUser();
               const adminPlexId = adminUser?.plexId || adminUser?.id;
               if (adminPlexId) {
-                labels.push(`AgregarrOverseerrOwner${adminPlexId}`);
+                labels.push(`${LABEL_PREFIX}OverseerrOwner${adminPlexId}`);
               } else {
                 // Fallback to config-based label if no admin plexId found
-                labels.push(`AgregarrOverseerrOwner_CONFIG_${c.id}`);
+                labels.push(`${LABEL_PREFIX}OverseerrOwner_CONFIG_${c.id}`);
               }
             } catch (error) {
               // Fallback to config-based label if admin user fetch fails
-              labels.push(`AgregarrOverseerrOwner_CONFIG_${c.id}`);
+              labels.push(`${LABEL_PREFIX}OverseerrOwner_CONFIG_${c.id}`);
             }
           } else {
-            labels.push(`AgregarrOverseerr${c.subtype}${c.id}`);
+            labels.push(`${LABEL_PREFIX}Overseerr${c.subtype}${c.id}`);
           }
           break;
         case 'tautulli':
-          labels.push(`AgregarrTautulli${c.id}`);
+          labels.push(`${LABEL_PREFIX}Tautulli${c.id}`);
           break;
         case 'trakt':
-          labels.push(`AgregarrTrakt${c.id}`);
+          labels.push(`${LABEL_PREFIX}Trakt${c.id}`);
           break;
         case 'tmdb':
-          labels.push(`AgregarrTmdb${c.id}`);
+          labels.push(`${LABEL_PREFIX}Tmdb${c.id}`);
           break;
         case 'imdb':
-          labels.push(`AgregarrImdb${c.id}`);
+          labels.push(`${LABEL_PREFIX}Imdb${c.id}`);
           break;
         case 'letterboxd':
-          labels.push(`AgregarrLetterboxd${c.id}`);
+          labels.push(`${LABEL_PREFIX}Letterboxd${c.id}`);
           break;
         default:
-          labels.push(`Agregarr${c.type}${c.id}`);
+          labels.push(`${LABEL_PREFIX}${c.type}${c.id}`);
       }
     }
 
@@ -508,7 +515,7 @@ export class CollectionCleanupService {
       .map((label: string | PlexLabel) =>
         typeof label === 'string' ? label : label.tag
       )
-      .filter((labelText) => labelText.toLowerCase().startsWith('agregarr'));
+      .filter((labelText) => isManagedLabel(labelText));
 
     if (managedLabels.length === 0) {
       return { shouldDelete: false, reason: 'not managed' };
@@ -530,12 +537,12 @@ export class CollectionCleanupService {
 
     // Special case for user collections - they don't store ratingKeys, use user validation instead
     const overseerrUserLabel = managedLabels.find((labelText) =>
-      labelText.toLowerCase().startsWith('agregarroverseerruser')
+      startsWithManaged(labelText, `${LABEL_PREFIX}OverseerrUser`)
     );
     if (overseerrUserLabel) {
       // Extract user Plex ID from collection labels
       const userPlexId = overseerrUserLabel.replace(
-        /^AgregarrOverseerrUser/i,
+        new RegExp(`^${LABEL_PREFIX_PATTERN}OverseerrUser`, 'i'),
         ''
       );
 
@@ -544,7 +551,9 @@ export class CollectionCleanupService {
       }
 
       // Check if users config type is still active and this specific user should have collections
-      const hasUsersConfig = activeConfigLabels.has('AgregarrOverseerrUser');
+      const hasUsersConfig = activeConfigLabels.has(
+        `${LABEL_PREFIX}OverseerrUser`
+      );
       if (!hasUsersConfig) {
         return { shouldDelete: true, reason: 'users config removed' };
       }
@@ -572,10 +581,10 @@ export class CollectionCleanupService {
     // Special case for auto franchise collections - they don't store ratingKeys on configs
     // (one config generates multiple Plex collections). Match by label prefix instead.
     const autoFranchiseLabel = managedLabels.find((labelText) =>
-      labelText.toLowerCase().startsWith('agregarrautofranchise-')
+      startsWithManaged(labelText, `${LABEL_PREFIX}AutoFranchise-`)
     );
     if (autoFranchiseLabel) {
-      // Extract configId from label format: AgregarrAutoFranchise-{configId}-{franchiseId}
+      // Extract configId from label format: PosterarrAutoFranchise-{configId}-{franchiseId}
       const parts = autoFranchiseLabel.split('-');
       const configId = parts.length >= 2 ? parts[1] : undefined;
 

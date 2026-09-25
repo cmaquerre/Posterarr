@@ -47,7 +47,7 @@ const messages = defineMessages({
   allCollectionsDescription:
     'Complete list of all Posterarr Collections, Default Plex Hubs, and Pre-existing Collections.',
   noCollections: 'No collections found.',
-  agregarrCollections: 'Posterarr Collections',
+  posterarrCollections: 'Posterarr Collections',
   plexHubs: 'Plex Hubs',
   preExistingCollections: 'Pre-existing Collections',
   totalCollections: '{count} total collections',
@@ -257,7 +257,7 @@ const AllCollectionsView: React.FC = () => {
     // Apply filters - update filter values to match new types
     if (filterType !== 'all') {
       filtered = filtered.filter((c) => {
-        if (filterType === 'agregarr') return c.type === 'collection';
+        if (filterType === 'posterarr') return c.type === 'collection';
         if (filterType === 'hub') return c.type === 'hub';
         if (filterType === 'preexisting') return c.type === 'preExisting';
         return c.type === filterType;
@@ -571,8 +571,8 @@ const AllCollectionsView: React.FC = () => {
               <option value="all">
                 {intl.formatMessage(messages.allTypes)}
               </option>
-              <option value="agregarr">
-                {intl.formatMessage(messages.agregarrCollections)}
+              <option value="posterarr">
+                {intl.formatMessage(messages.posterarrCollections)}
               </option>
               <option value="hub">
                 {intl.formatMessage(messages.plexHubs)}

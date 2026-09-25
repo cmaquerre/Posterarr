@@ -804,7 +804,7 @@ export class CollectionSyncService {
 
   /**
    * Clean up user filter labels when no Overseerr user configs exist
-   * Removes AgregarrOverseerr* labels from all users' filter settings
+   * Removes PosterarrOverseerr* labels from all users' filter settings
    */
   private async cleanupUserFilterLabels(): Promise<void> {
     try {

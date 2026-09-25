@@ -1,5 +1,6 @@
 import PlexAPI from '@server/api/plexapi';
 import { extractErrorMessage } from '@server/lib/collections/core/CollectionUtilities';
+import { isManagedLabel } from '@server/lib/collections/core/labelPrefix';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { CollectionCleanupService } from './collections/services/CollectionCleanupService';
@@ -294,8 +295,12 @@ class CollectionsSync {
 
       // Get collection count for progress tracking - only count actual posterarr collections
       const settings = getSettings();
-      const agregarrCollections = settings.plex.collectionConfigs || [];
-      this.setStage('Processing collections...', agregarrCollections.length, 0);
+      const posterarrCollections = settings.plex.collectionConfigs || [];
+      this.setStage(
+        'Processing collections...',
+        posterarrCollections.length,
+        0
+      );
 
       // Perform the sync operations using our new service
       const syncResult = await collectionSyncService.syncAllConfigurations(
@@ -303,12 +308,16 @@ class CollectionsSync {
         (processed: number, currentAction?: string) => {
           if (currentAction) {
             // Show detailed action for current collection
-            this.setStage(currentAction, agregarrCollections.length, processed);
+            this.setStage(
+              currentAction,
+              posterarrCollections.length,
+              processed
+            );
           } else {
             // Show general progress
             this.setStage(
               'Processing collections...',
-              agregarrCollections.length,
+              posterarrCollections.length,
               processed
             );
           }
@@ -345,9 +354,9 @@ class CollectionsSync {
         const settings = getSettings();
         const collectionConfigs = settings.plex.collectionConfigs || [];
 
-        // Get all collections to find agregarr-managed ones
+        // Get all collections to find posterarr-managed ones
         const allCollections = await plexClient.getAllCollections();
-        const agregarrCollections = allCollections.filter(
+        const posterarrCollections = allCollections.filter(
           (collection) =>
             Array.isArray(collection.labels) &&
             collection.labels.some((label) => {
@@ -355,15 +364,15 @@ class CollectionsSync {
                 typeof label === 'string'
                   ? label
                   : (label as { tag: string }).tag;
-              return labelText.toLowerCase().startsWith('agregarr');
+              return isManagedLabel(labelText);
             })
         );
 
-        if (agregarrCollections.length > 0) {
+        if (posterarrCollections.length > 0) {
           const cleanupResult =
             await this.cleanupService.cleanupDisabledCollections(
               plexClient,
-              agregarrCollections,
+              posterarrCollections,
               collectionConfigs,
               {}, // userCollections - handled internally by cleanup logic
               syncResult.processedCollectionKeys // Pass the collections that were just processed

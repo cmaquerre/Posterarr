@@ -597,7 +597,7 @@ export async function generatePoster(
 
     // Create temporary file in system temp directory (NOT in config/posters/)
     // This ensures auto-generated posters never appear in the posters list
-    const tempFilename = `agregarr_poster_${randomUUID()}_${Date.now()}.jpg`;
+    const tempFilename = `posterarr_poster_${randomUUID()}_${Date.now()}.jpg`;
     const tempPath = path.join(os.tmpdir(), tempFilename);
 
     // Save temporarily for upload to Plex

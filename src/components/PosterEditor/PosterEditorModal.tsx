@@ -394,14 +394,14 @@ export const PosterEditorModal: React.FC<PosterEditorModalProps> = ({
 
   // Combine both collection types for the dropdown
   const allPreviewCollections = useMemo(() => {
-    const agregarrCollections = (collectionsData?.collectionConfigs || []).map(
+    const posterarrCollections = (collectionsData?.collectionConfigs || []).map(
       (c) => ({
         id: c.id || c.name,
         name: c.name,
         type: c.type || 'unknown',
         subtype: c.subtype,
         mediaType: c.mediaType || ('movie' as const),
-        source: 'agregarr' as const,
+        source: 'posterarr' as const,
         libraryId: c.libraryId,
       })
     );
@@ -416,7 +416,7 @@ export const PosterEditorModal: React.FC<PosterEditorModalProps> = ({
       libraryId: c.libraryId,
     }));
 
-    return [...agregarrCollections, ...preExisting];
+    return [...posterarrCollections, ...preExisting];
   }, [collectionsData, preExistingData]);
 
   // Group collections by library for the dropdown

@@ -1,6 +1,6 @@
 # Posterarr
 
-Posterarr garde votre écran d'accueil Plex ("Home" / "Recommended") à jour en générant automatiquement des Collections à partir de sources externes (Trakt, IMDb, TMDB, Letterboxd, MDBList, FlixPatrol, AniList, MyAnimeList), de vos statistiques Tautulli, ou de vos demandes Overseerr. Il peut aussi télécharger automatiquement les médias manquants via Radarr/Sonarr/Overseerr, générer des affiches (overlays) personnalisées, et — sur ce fork — détecter et afficher la langue disponible (VF/VOSTFR) sur les affiches.
+Posterarr garde votre écran d'accueil Plex ("Home" / "Recommended") à jour en générant automatiquement des Collections à partir de sources externes (Trakt, IMDb, TMDB, Letterboxd, MDBList, FlixPatrol, AniList, MyAnimeList), de vos statistiques Tautulli, ou de vos demandes Overseerr. Il peut aussi télécharger automatiquement les médias manquants via Radarr/Sonarr/Overseerr, générer des affiches (overlays) personnalisées, et détecter et afficher la langue disponible (VF/VOSTFR) sur les affiches.
 
 ## Sommaire
 
@@ -35,10 +35,8 @@ Posterarr garde votre écran d'accueil Plex ("Home" / "Recommended") à jour en 
 - **Système de templates** pour les noms de collections et l'import de titres depuis les listes.
 - **Restrictions temporelles** : collections actives uniquement sur certaines périodes/jours.
 - **Affiches personnalisées** (Poster Templates) et overlays dynamiques.
-- **Language Tagger (spécifique à ce fork)** : détecte automatiquement si un fichier est en VF, VOSTFR, ou multi-langue et l'affiche sur le poster.
-- **Webhooks temps réel (spécifique à ce fork)** : Radarr/Sonarr/Plex peuvent notifier Posterarr immédiatement après un téléchargement ou un remplacement de fichier (upgrade), pour régénérer l'affiche sans attendre le prochain cycle planifié.
-
-<img width="1902" height="983" alt="agregarr-promo" src="https://github.com/user-attachments/assets/1b744502-30ce-4988-93fc-4588e1207e69" />
+- **Language Tagger** : détecte automatiquement si un fichier est en VF, VOSTFR, ou multi-langue et l'affiche sur le poster.
+- **Webhooks temps réel** : Radarr/Sonarr/Plex peuvent notifier Posterarr immédiatement après un téléchargement ou un remplacement de fichier (upgrade), pour régénérer l'affiche sans attendre le prochain cycle planifié.
 
 ## Installation
 
@@ -46,7 +44,7 @@ Posterarr fonctionne en conteneur Docker. Deux méthodes possibles.
 
 ### Option A — Image pré-construite (recommandé)
 
-L'image est construite automatiquement par la CI GitHub Actions de ce dépôt (`.github/workflows/build-fork.yml`) et publiée sur GHCR.
+L'image est construite automatiquement par la CI GitHub Actions de ce dépôt (`.github/workflows/build.yml`) et publiée sur GHCR.
 
 ```yaml
 services:
@@ -102,10 +100,10 @@ L'application est accessible sur `http://localhost:7173` (ou le port choisi).
 
 ### Variables d'environnement importantes
 
-| Variable | Rôle |
-|---|---|
+| Variable           | Rôle                                                                                                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CONFIG_DIRECTORY` | Chemin **dans le conteneur** où Posterarr lit/écrit `settings.json` et ses autres données persistantes. Doit correspondre à la cible du volume monté. |
-| `TZ` | Fuseau horaire, utilisé pour calculer les dates/compte-à-rebours affichés sur les overlays. |
+| `TZ`               | Fuseau horaire, utilisé pour calculer les dates/compte-à-rebours affichés sur les overlays.                                                           |
 
 ### Persistance des données
 

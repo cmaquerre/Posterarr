@@ -128,7 +128,7 @@ const messages = defineMessages({
   mdblistApiKeyTip:
     'Get your API key from <code>https://mdblist.com/preferences/</code> and generate a new API key.',
   myanimelistApiKeyTip:
-    'Get your API key from <code>https://myanimelist.net/apiconfig</code> and copy the <code>Client ID</code>. Critical fields: App Type - <code>Web</code>, App Redirect URL - <code>http://localhost/</code>, Homepage URL - <code>https://github.com/agregarr/agregarr</code>, <code>Non-Commercial</code>, <code>Hobbyist</code>.',
+    'Get your API key from <code>https://myanimelist.net/apiconfig</code> and copy the <code>Client ID</code>. Critical fields: App Type - <code>Web</code>, App Redirect URL - <code>http://localhost/</code>, Homepage URL - <code>https://github.com/cmaquerre/agregarr_test</code>, <code>Non-Commercial</code>, <code>Hobbyist</code>.',
   overseerrDownloadsPageInfo:
     'To use Seerr Requests as a collection source, Radarr/Sonarr tags and "Coming Soon" collections, or to enable automatic downloading of missing items, configure these services on the <strong>Downloads</strong> page (next step in setup).',
   overseerrDownloadsPageInfoSettings:

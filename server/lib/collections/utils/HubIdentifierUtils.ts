@@ -1,3 +1,5 @@
+import { isManagedLabel } from '@server/lib/collections/core/labelPrefix';
+
 /**
  * Centralized utility for parsing and handling Plex hub identifiers
  *
@@ -361,7 +363,7 @@ export function categorizeDiscoveredItem(
     };
   }
 
-  // Custom collections - check if they're Agregarr-managed
+  // Custom collections - check if they're Posterarr-managed
   if (parsedHub.isCustomCollection && parsedHub.ratingKey) {
     // First try to match by rating key
     let matchedConfig = collectionConfigs.find(
@@ -392,7 +394,7 @@ export function categorizeDiscoveredItem(
 
     return {
       collectionType: matchedConfig
-        ? CollectionType.AGREGARR_CREATED
+        ? CollectionType.POSTERARR_CREATED
         : CollectionType.PRE_EXISTING,
       matchedConfig: matchedConfig
         ? { id: matchedConfig.id, name: matchedConfig.name }
@@ -402,14 +404,14 @@ export function categorizeDiscoveredItem(
 
   // Non-promoted collections - check by labels
   if (collectionLabels) {
-    const isAgregarrManaged = collectionLabels.some((label) => {
+    const isPosterarrManaged = collectionLabels.some((label) => {
       const labelText = typeof label === 'string' ? label : label.tag;
-      return labelText.toLowerCase().startsWith('agregarr');
+      return isManagedLabel(labelText);
     });
 
     return {
-      collectionType: isAgregarrManaged
-        ? CollectionType.AGREGARR_CREATED
+      collectionType: isPosterarrManaged
+        ? CollectionType.POSTERARR_CREATED
         : CollectionType.PRE_EXISTING,
     };
   }
@@ -554,11 +556,11 @@ export function logDiscoveryResult(
   collectionConfigs?: { name: string; template?: string }[]
 ): void {
   if (
-    categorization.collectionType === CollectionType.AGREGARR_CREATED &&
+    categorization.collectionType === CollectionType.POSTERARR_CREATED &&
     categorization.matchedConfig
   ) {
     logger.info(
-      `Found Agregarr-managed collection promoted to hub: ${hubData.title}`,
+      `Found Posterarr-managed collection promoted to hub: ${hubData.title}`,
       {
         label: 'Hub Discovery',
         identifier: hubData.identifier || parsedHub.hubIdentifier,

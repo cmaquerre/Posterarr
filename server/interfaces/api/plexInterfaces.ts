@@ -97,7 +97,7 @@ export interface ProcessedHubConfig {
   libraryId: string;
   libraryName: string;
   mediaType: 'movie' | 'tv' | 'both';
-  isAgregarrManaged: boolean;
+  isPosterarrManaged: boolean;
   isDefaultPlexHub: boolean;
   isPromotedToHub: boolean;
   sortOrderHome: number;

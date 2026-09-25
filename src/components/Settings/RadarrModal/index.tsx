@@ -54,9 +54,9 @@ const messages = defineMessages({
   tagRequestsInfo:
     'Choose how Posterarr tags Radarr downloads (tags are created if they do not exist).',
   tagModeOff: 'Do not add automatic tags',
-  tagModeSingle: 'Single tag (agregarr)',
-  tagModePerService: 'Per service tags (trakt-agregarr, tmdb-agregarr)',
-  tagModeGranular: 'Per collection tags (trakt-trending-agregarr)',
+  tagModeSingle: 'Single tag (posterarr)',
+  tagModePerService: 'Per service tags (trakt-posterarr, tmdb-posterarr)',
+  tagModeGranular: 'Per collection tags (trakt-trending-posterarr)',
   validationApplicationUrl: 'You must provide a valid URL',
   validationApplicationUrlTrailingSlash: 'URL must not end in a trailing slash',
   validationBaseUrlLeadingSlash: 'URL base must have a leading slash',
