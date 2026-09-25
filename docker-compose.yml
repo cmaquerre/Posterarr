@@ -1,5 +1,6 @@
 services:
   posterarr:
+    container_name: posterarr
     build:
       context: .
       dockerfile: Dockerfile

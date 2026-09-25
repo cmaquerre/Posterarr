@@ -9,7 +9,8 @@ RUN apk add --no-cache \
   python3 make g++ gcc libc6-compat bash \
   build-base cairo-dev pango-dev jpeg-dev giflib-dev pixman-dev
 
-RUN yarn global add node-gyp
+# Pin node-gyp: v13+ requires Node >=22 (proc-log@7), but this image is Node 20
+RUN yarn global add node-gyp@11.4.2
 
 COPY package.json yarn.lock ./
 RUN CYPRESS_INSTALL_BINARY=0 yarn install --frozen-lockfile --network-timeout 1000000
