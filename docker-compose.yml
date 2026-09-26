@@ -1,6 +1,7 @@
 services:
   posterarr:
     container_name: posterarr
+    image: ghcr.io/cmaquerre/posterarr:${POSTERARR_TAG:-develop}
     build:
       context: .
       dockerfile: Dockerfile
