@@ -31,6 +31,16 @@ import YAML from 'yamljs';
 const API_SPEC_PATH = path.join(__dirname, '../posterarr-api.yml');
 
 logger.info(`Starting Posterarr version ${getAppVersion()}`);
+// Background jobs are mostly fire-and-forget; make their failures visible
+// instead of letting them vanish
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection', {
+    label: 'Server',
+    error: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+});
+
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();

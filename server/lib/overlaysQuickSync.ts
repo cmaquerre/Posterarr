@@ -235,6 +235,16 @@ class OverlaysQuickSync {
             itemCount: itemsNeedingOverlays.length,
           });
 
+          // Tag languages first so VF/MULTI/VOSTFR overlays render on the
+          // first pass (same order as the webhook trigger queue)
+          await this.tagLanguages(
+            plexClient,
+            recentItems.filter((item) =>
+              itemsNeedingOverlays.includes(item.ratingKey)
+            ),
+            mediaType
+          );
+
           // Apply overlays using existing service
           const { overlayLibraryService } = await import(
             '@server/lib/overlays/OverlayLibraryService'
@@ -281,6 +291,48 @@ class OverlaysQuickSync {
       this.running = false;
       this.cancelled = false;
       this.currentStage = '';
+    }
+  }
+
+  private async tagLanguages(
+    plexClient: PlexAPI,
+    items: PlexLibraryItem[],
+    mediaType: 'movie' | 'show'
+  ): Promise<void> {
+    if (!getSettings().languageTagger?.enabled || items.length === 0) return;
+
+    const { languageTaggerService } = await import(
+      '@server/lib/languageTagger/LanguageTaggerService'
+    );
+
+    for (const item of items) {
+      const tmdbGuid = item.Guid?.find((g) => g.id.startsWith('tmdb://'));
+      const tmdbId = tmdbGuid
+        ? parseInt(tmdbGuid.id.replace('tmdb://', ''), 10)
+        : undefined;
+      try {
+        if (mediaType === 'movie') {
+          await languageTaggerService.tagMovie(
+            item.ratingKey,
+            item.title,
+            tmdbId,
+            plexClient
+          );
+        } else {
+          await languageTaggerService.tagShow(
+            item.ratingKey,
+            item.title,
+            tmdbId,
+            plexClient
+          );
+        }
+      } catch (error) {
+        logger.warn('Language tagging failed for new item', {
+          label: 'Overlays Quick Sync',
+          title: item.title,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 

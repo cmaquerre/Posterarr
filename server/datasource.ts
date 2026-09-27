@@ -40,4 +40,19 @@ export const getRepository = <Entity extends object>(
   return dataSource.getRepository(target);
 };
 
+/**
+ * Repository.remove() deletes many entities with one statement whose WHERE
+ * clause grows with the entity count; past ~1000 rows SQLite rejects it
+ * ("Expression tree is too large"). Remove in bounded chunks instead.
+ */
+export const removeInChunks = async <Entity extends object>(
+  repository: Repository<Entity>,
+  entities: Entity[],
+  chunkSize = 200
+): Promise<void> => {
+  for (let i = 0; i < entities.length; i += chunkSize) {
+    await repository.remove(entities.slice(i, i + chunkSize));
+  }
+};
+
 export default dataSource;

@@ -19,6 +19,7 @@ const HANDLED_EVENTS = new Set([
 interface SonarrWebhookSeries {
   tmdbId?: number;
   tvdbId?: number;
+  imdbId?: string;
   title?: string;
   year?: number;
 }
@@ -59,6 +60,7 @@ router.post('/', (req, res) => {
       eventType,
       series: series?.title,
       tmdbId: series?.tmdbId,
+      tvdbId: series?.tvdbId,
       isUpgrade: payload.isUpgrade,
     });
 
@@ -70,8 +72,9 @@ router.post('/', (req, res) => {
       return;
     }
 
-    if (!series?.tmdbId) {
-      logger.warn('Sonarr webhook: no TMDB ID in payload', {
+    // Sonarr is TVDB-first: tmdbId is often missing or 0
+    if (!series?.tmdbId && !series?.tvdbId && !series?.imdbId) {
+      logger.warn('Sonarr webhook: no TMDB/TVDB/IMDb ID in payload', {
         label: 'SonarrWebhook',
         eventType,
         series: series?.title,
@@ -79,7 +82,14 @@ router.post('/', (req, res) => {
       return;
     }
 
-    overlayTriggerQueue.enqueueTmdbItem(series.tmdbId, 'show');
+    overlayTriggerQueue.enqueueTmdbItem(
+      {
+        tmdbId: series.tmdbId || undefined,
+        tvdbId: series.tvdbId || undefined,
+        imdbId: series.imdbId || undefined,
+      },
+      'show'
+    );
   } catch (error) {
     logger.error('Sonarr webhook: processing error', {
       label: 'SonarrWebhook',

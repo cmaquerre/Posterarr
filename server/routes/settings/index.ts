@@ -5,7 +5,7 @@ import PlexAPI from '@server/api/plexapi';
 import PlexTvAPI from '@server/api/plextv';
 import TautulliAPI from '@server/api/tautulli';
 import TraktAPI from '@server/api/trakt';
-import { getRepository } from '@server/datasource';
+import { getRepository, removeInChunks } from '@server/datasource';
 import Media from '@server/entity/Media';
 // MediaRequest entity removed - not needed for Posterarr
 import { User } from '@server/entity/User';
@@ -1414,7 +1414,7 @@ settingsRoutes.post('/reset', async (_req, res, next) => {
         }
 
         // Delete all database records
-        await repository.remove(allPlaceholders);
+        await removeInChunks(repository, allPlaceholders);
 
         logger.info('Placeholder cleanup completed during reset', {
           label: 'Settings Reset',

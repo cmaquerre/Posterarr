@@ -26,6 +26,22 @@ interface ScheduledJob {
 
 export const scheduledJobs: ScheduledJob[] = [];
 
+/**
+ * Jobs are fire-and-forget from the scheduler's point of view: without this,
+ * a rejected run disappears silently (no log, no crash).
+ */
+const runSafely = (name: string, run: () => Promise<unknown> | unknown) => {
+  Promise.resolve()
+    .then(run)
+    .catch((error) => {
+      logger.error(`Scheduled job failed: ${name}`, {
+        label: 'Jobs',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
+};
+
 export const startJobs = (): void => {
   const jobs = getSettings().jobs;
 
@@ -65,7 +81,7 @@ export const startJobs = (): void => {
       logger.info('Starting scheduled job: Plex Collections Sync', {
         label: 'Jobs',
       });
-      collectionsSync.run();
+      runSafely('Plex Collections Sync', () => collectionsSync.run());
     }),
     running: () => collectionsSync.status.running,
     cancelFn: () => collectionsSync.cancel(),
@@ -83,7 +99,7 @@ export const startJobs = (): void => {
         logger.info('Starting scheduled job: Collections Quick Sync', {
           label: 'Jobs',
         });
-        collectionsQuickSync.run();
+        runSafely('Collections Quick Sync', () => collectionsQuickSync.run());
       }
     ),
     running: () => collectionsQuickSync.status.running,
@@ -102,7 +118,7 @@ export const startJobs = (): void => {
         logger.info('Starting scheduled job: Plex Randomize Home Order', {
           label: 'Jobs',
         });
-        randomizeHomeOrder.run();
+        runSafely('Plex Randomize Home Order', () => randomizeHomeOrder.run());
       }
     ),
     running: () => randomizeHomeOrder.status.running,
@@ -119,7 +135,7 @@ export const startJobs = (): void => {
       logger.info('Starting scheduled job: Overlay Application', {
         label: 'Jobs',
       });
-      overlayApplication.run();
+      runSafely('Overlay Application', () => overlayApplication.run());
     }),
     running: () => overlayApplication.status.running,
     cancelFn: () => overlayApplication.cancel(),
@@ -135,7 +151,7 @@ export const startJobs = (): void => {
       logger.info('Starting scheduled job: Overlay Quick Sync', {
         label: 'Jobs',
       });
-      overlaysQuickSync.run();
+      runSafely('Overlay Quick Sync', () => overlaysQuickSync.run());
     }),
     running: () => overlaysQuickSync.status.running,
     cancelFn: () => overlaysQuickSync.cancel(),
@@ -151,7 +167,7 @@ export const startJobs = (): void => {
       logger.info('Starting scheduled job: Plex Refresh Token', {
         label: 'Jobs',
       });
-      refreshToken.run();
+      runSafely('Plex Refresh Token', () => refreshToken.run());
     }),
   });
 
@@ -161,14 +177,16 @@ export const startJobs = (): void => {
     type: 'process',
     interval: 'fixed',
     cronSchedule: jobs['language-tagger'].schedule,
-    job: schedule.scheduleJob(jobs['language-tagger'].schedule, async () => {
+    job: schedule.scheduleJob(jobs['language-tagger'].schedule, () => {
       logger.info('Starting scheduled job: Language Tagger', {
         label: 'Jobs',
       });
-      const { languageTaggerService } = await import(
-        '@server/lib/languageTagger/LanguageTaggerService'
-      );
-      languageTaggerService.runAllLibraryTagging();
+      runSafely('Language Tagger', async () => {
+        const { languageTaggerService } = await import(
+          '@server/lib/languageTagger/LanguageTaggerService'
+        );
+        await languageTaggerService.runAllLibraryTagging();
+      });
     }),
   });
 
@@ -193,7 +211,7 @@ export const startJobs = (): void => {
       logger.info('Starting scheduled job: Plex Watchlist Sync', {
         label: 'Jobs',
       });
-      watchlistSync.run();
+      runSafely('Plex Watchlist Sync', () => watchlistSync.run());
     }),
     running: () => watchlistSync.status.running,
     cancelFn: () => watchlistSync.cancel(),

@@ -13,6 +13,7 @@ const HANDLED_EVENTS = new Set(['Download', 'MovieFileUpdated', 'Grab']);
 
 interface RadarrWebhookMovie {
   tmdbId?: number;
+  imdbId?: string;
   title?: string;
   year?: number;
 }
@@ -64,8 +65,8 @@ router.post('/', (req, res) => {
       return;
     }
 
-    if (!movie?.tmdbId) {
-      logger.warn('Radarr webhook: no TMDB ID in payload', {
+    if (!movie?.tmdbId && !movie?.imdbId) {
+      logger.warn('Radarr webhook: no TMDB/IMDb ID in payload', {
         label: 'RadarrWebhook',
         eventType,
         movie: movie?.title,
@@ -73,7 +74,13 @@ router.post('/', (req, res) => {
       return;
     }
 
-    overlayTriggerQueue.enqueueTmdbItem(movie.tmdbId, 'movie');
+    overlayTriggerQueue.enqueueTmdbItem(
+      {
+        tmdbId: movie.tmdbId || undefined,
+        imdbId: movie.imdbId || undefined,
+      },
+      'movie'
+    );
   } catch (error) {
     logger.error('Radarr webhook: processing error', {
       label: 'RadarrWebhook',

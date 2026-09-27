@@ -1,5 +1,5 @@
-import PlexAPI from '@server/api/plexapi';
 import type { PlexMetadata } from '@server/api/plexapi';
+import PlexAPI from '@server/api/plexapi';
 import { getRepository } from '@server/datasource';
 import { LanguageTagRecord } from '@server/entity/LanguageTagRecord';
 import { getAdminUser } from '@server/lib/collections/core/CollectionUtilities';
@@ -33,7 +33,13 @@ export interface TaggingResult {
     source?: string;
     error?: string;
   }[];
+  /** Show/season/movie ratingKeys whose record is current after the run */
+  seenRatingKeys: string[];
 }
+
+// SQLite rejects statements with huge IN lists / OR chains, so bulk deletes
+// are split into chunks
+const DELETE_CHUNK_SIZE = 500;
 
 function isFrench(lang: string): boolean {
   return FRENCH_CODES.has(lang.toLowerCase().trim());
@@ -48,7 +54,7 @@ function isFrench(lang: string): boolean {
  */
 function detectTag(audio: string[], subtitles: string[] = []): LanguageTag {
   const hasFrenchAudio = audio.some(isFrench);
-  const hasOtherAudio  = audio.some((l) => !isFrench(l));
+  const hasOtherAudio = audio.some((l) => !isFrench(l));
   if (hasFrenchAudio && hasOtherAudio) return 'MULTI';
   if (hasFrenchAudio) return 'VF';
   return 'VOSTFR';
@@ -69,16 +75,21 @@ function determineMajorityTag(tags: LanguageTag[]): LanguageTag {
  * from a Plex metadata object's Media.Part.Stream entries.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractPlexStreamLanguages(obj: any): { audio: string[]; subtitles: string[] } {
+function extractPlexStreamLanguages(obj: any): {
+  audio: string[];
+  subtitles: string[];
+} {
   const audio = new Set<string>();
   const subtitles = new Set<string>();
   for (const media of obj?.Media ?? []) {
     for (const part of media?.Part ?? []) {
       for (const stream of part?.Stream ?? []) {
-        const lang: string | undefined = stream?.languageCode ?? stream?.language;
+        const lang: string | undefined =
+          stream?.languageCode ?? stream?.language;
         if (!lang?.trim()) continue;
         if (stream.streamType === 2) audio.add(lang.toLowerCase().trim());
-        else if (stream.streamType === 3) subtitles.add(lang.toLowerCase().trim());
+        else if (stream.streamType === 3)
+          subtitles.add(lang.toLowerCase().trim());
       }
     }
   }
@@ -127,6 +138,8 @@ type ShowTagEntry = {
 };
 
 class LanguageTaggerService {
+  public running = false;
+
   private async saveRecord(params: {
     ratingKey: string;
     title: string;
@@ -311,7 +324,9 @@ class LanguageTaggerService {
         );
 
         const episodeTags = streamResults
-          .filter(({ audio, subtitles }) => audio.length > 0 || subtitles.length > 0)
+          .filter(
+            ({ audio, subtitles }) => audio.length > 0 || subtitles.length > 0
+          )
           .map(({ audio, subtitles }) => detectTag(audio, subtitles));
 
         if (episodeTags.length) {
@@ -323,7 +338,9 @@ class LanguageTaggerService {
       if (!anyTag) return null;
 
       return {
-        seriesTag: determineMajorityTag(Object.values(seasonTags) as LanguageTag[]),
+        seriesTag: determineMajorityTag(
+          Object.values(seasonTags) as LanguageTag[]
+        ),
         seasonTags,
         seasonRatingKeys,
         source: 'ffprobe',
@@ -345,7 +362,7 @@ class LanguageTaggerService {
   async tagMovie(
     ratingKey: string,
     title: string,
-    tmdbId: number,
+    tmdbId: number | undefined,
     plexApi: PlexAPI
   ): Promise<void> {
     const result =
@@ -353,17 +370,33 @@ class LanguageTaggerService {
       (await this.fetchMovieTagFromFfprobe(ratingKey, plexApi));
 
     if (result) {
-      await this.saveRecord({ ratingKey, title, mediaType: 'movie', tmdbId, tag: result.tag, source: result.source });
-      logger.info('LanguageTagger: tagged movie', { label: 'LanguageTagger', title, tag: result.tag, source: result.source });
+      await this.saveRecord({
+        ratingKey,
+        title,
+        mediaType: 'movie',
+        tmdbId,
+        tag: result.tag,
+        source: result.source,
+      });
+      logger.info('LanguageTagger: tagged movie', {
+        label: 'LanguageTagger',
+        title,
+        tag: result.tag,
+        source: result.source,
+      });
     } else {
-      logger.debug('LanguageTagger: no language info found for movie', { label: 'LanguageTagger', title, tmdbId });
+      logger.debug('LanguageTagger: no language info found for movie', {
+        label: 'LanguageTagger',
+        title,
+        tmdbId,
+      });
     }
   }
 
   async tagShow(
     showRatingKey: string,
     title: string,
-    tmdbId: number,
+    tmdbId: number | undefined,
     plexApi: PlexAPI
   ): Promise<void> {
     const result =
@@ -380,10 +413,25 @@ class LanguageTaggerService {
         seasonTags: result.seasonTags,
         source: result.source,
       });
-      await this.saveSeasonRecords(title, tmdbId, result.seasonTags, result.seasonRatingKeys, result.source);
-      logger.info('LanguageTagger: tagged show', { label: 'LanguageTagger', title, tag: result.seriesTag, source: result.source });
+      await this.saveSeasonRecords(
+        title,
+        tmdbId,
+        result.seasonTags,
+        result.seasonRatingKeys,
+        result.source
+      );
+      logger.info('LanguageTagger: tagged show', {
+        label: 'LanguageTagger',
+        title,
+        tag: result.seriesTag,
+        source: result.source,
+      });
     } else {
-      logger.debug('LanguageTagger: no language info found for show', { label: 'LanguageTagger', title, tmdbId });
+      logger.debug('LanguageTagger: no language info found for show', {
+        label: 'LanguageTagger',
+        title,
+        tmdbId,
+      });
     }
   }
 
@@ -393,33 +441,27 @@ class LanguageTaggerService {
     mediaType: 'movie' | 'show',
     clearFirst = true
   ): Promise<TaggingResult> {
-    if (clearFirst) {
-      // Clear existing records for this media type (and season records for shows)
-      // so stale entries from previous scans don't linger.
-      const repo = getRepository(LanguageTagRecord);
-      const typesToClear = mediaType === 'show' ? ['show', 'season'] : ['movie'];
-      await repo
-        .createQueryBuilder()
-        .delete()
-        .where('mediaType IN (:...types)', { types: typesToClear })
-        .execute();
-      logger.info('LanguageTagger: cleared records before scan', {
-        label: 'LanguageTagger',
-        mediaType,
-        typesToClear,
-      });
-    }
-
-    const result: TaggingResult = { tagged: 0, skipped: 0, errors: 0, items: [] };
+    const result: TaggingResult = {
+      tagged: 0,
+      skipped: 0,
+      errors: 0,
+      items: [],
+      seenRatingKeys: [],
+    };
     let offset = 0;
     const pageSize = 50;
 
     while (true) {
-      const { items, totalSize } = await plexApi.getLibraryContents(libraryId, { offset, size: pageSize });
+      const { items, totalSize } = await plexApi.getLibraryContents(libraryId, {
+        offset,
+        size: pageSize,
+      });
 
       for (const item of items) {
         const tmdbGuid = item.Guid?.find((g) => g.id.startsWith('tmdb://'));
-        const tmdbId = tmdbGuid ? parseInt(tmdbGuid.id.replace('tmdb://', ''), 10) : undefined;
+        const tmdbId = tmdbGuid
+          ? parseInt(tmdbGuid.id.replace('tmdb://', ''), 10)
+          : undefined;
 
         try {
           let tag: LanguageTag | null = null;
@@ -431,7 +473,10 @@ class LanguageTaggerService {
             const entry =
               (await this.fetchMovieTagFromPlex(item.ratingKey, plexApi)) ??
               (await this.fetchMovieTagFromFfprobe(item.ratingKey, plexApi));
-            if (entry) { tag = entry.tag; source = entry.source; }
+            if (entry) {
+              tag = entry.tag;
+              source = entry.source;
+            }
           } else {
             const entry =
               (await this.fetchShowTagsFromPlex(item.ratingKey, plexApi)) ??
@@ -445,17 +490,44 @@ class LanguageTaggerService {
           }
 
           if (tag) {
-            await this.saveRecord({ ratingKey: item.ratingKey, title: item.title, mediaType, tmdbId, tag, seasonTags, source: source! });
+            await this.saveRecord({
+              ratingKey: item.ratingKey,
+              title: item.title,
+              mediaType,
+              tmdbId,
+              tag,
+              seasonTags,
+              source: source!,
+            });
+            result.seenRatingKeys.push(item.ratingKey);
             if (seasonTags && seasonRatingKeys) {
-              await this.saveSeasonRecords(item.title, tmdbId, seasonTags, seasonRatingKeys, source!);
+              await this.saveSeasonRecords(
+                item.title,
+                tmdbId,
+                seasonTags,
+                seasonRatingKeys,
+                source!
+              );
+              result.seenRatingKeys.push(...Object.values(seasonRatingKeys));
             }
             result.tagged++;
-            result.items.push({ title: item.title, ratingKey: item.ratingKey, tag, source });
+            result.items.push({
+              title: item.title,
+              ratingKey: item.ratingKey,
+              tag,
+              source,
+            });
           } else {
             result.skipped++;
-            result.items.push({ title: item.title, ratingKey: item.ratingKey, tag: null });
+            result.items.push({
+              title: item.title,
+              ratingKey: item.ratingKey,
+              tag: null,
+            });
           }
         } catch (e) {
+          // Keep the previous record (and its seasons) for items that failed
+          result.seenRatingKeys.push(item.ratingKey);
           result.errors++;
           result.items.push({
             title: item.title,
@@ -468,6 +540,18 @@ class LanguageTaggerService {
 
       offset += items.length;
       if (offset >= totalSize || items.length === 0) break;
+    }
+
+    if (clearFirst) {
+      // Drop records that no longer match anything in the library. Done after
+      // the scan (not before) so overlays keep their tags while it runs.
+      const typesToPrune =
+        mediaType === 'show' ? ['show', 'season'] : ['movie'];
+      await this.pruneRecords(
+        typesToPrune,
+        result.seenRatingKeys,
+        result.errors > 0
+      );
     }
 
     logger.info('LanguageTagger: library run complete', {
@@ -488,30 +572,59 @@ class LanguageTaggerService {
    * clearing between runs so multi-library setups accumulate correctly.
    */
   async runAllLibraryTagging(): Promise<void> {
+    if (this.running) {
+      logger.warn(
+        'LanguageTagger: a tagging run is already in progress, skipping',
+        {
+          label: 'LanguageTagger',
+        }
+      );
+      return;
+    }
+    this.running = true;
+    try {
+      await this.doRunAllLibraryTagging();
+    } finally {
+      this.running = false;
+    }
+  }
+
+  private async doRunAllLibraryTagging(): Promise<void> {
     const settings = getSettings();
     if (!settings.languageTagger?.enabled) {
-      logger.info('LanguageTagger: tagger not enabled, skipping scheduled run', {
-        label: 'LanguageTagger',
-      });
+      logger.info(
+        'LanguageTagger: tagger not enabled, skipping scheduled run',
+        {
+          label: 'LanguageTagger',
+        }
+      );
       return;
     }
 
     const plexApi = await this.getPlexApi();
     if (!plexApi) {
-      logger.warn('LanguageTagger: Plex not configured, skipping scheduled run', {
-        label: 'LanguageTagger',
-      });
+      logger.warn(
+        'LanguageTagger: Plex not configured, skipping scheduled run',
+        {
+          label: 'LanguageTagger',
+        }
+      );
       return;
     }
 
     const { getRepository: getRepo } = await import('@server/datasource');
-    const { OverlayLibraryConfig } = await import('@server/entity/OverlayLibraryConfig');
+    const { OverlayLibraryConfig } = await import(
+      '@server/entity/OverlayLibraryConfig'
+    );
     const configs = await getRepo(OverlayLibraryConfig).find();
 
     if (configs.length === 0) {
-      logger.info('LanguageTagger: no overlay libraries configured, skipping scheduled run', {
-        label: 'LanguageTagger',
-      });
+      logger.info(
+        'LanguageTagger: no overlay libraries configured, skipping scheduled run',
+        {
+          label: 'LanguageTagger',
+        }
+      );
       return;
     }
 
@@ -520,11 +633,10 @@ class LanguageTaggerService {
       libraryCount: configs.length,
     });
 
-    // Clear all records once before the full sweep
-    await this.clearRecords();
-
     let totalTagged = 0;
     let totalErrors = 0;
+    let libraryFailed = false;
+    const seenRatingKeys: string[] = [];
 
     for (const config of configs) {
       try {
@@ -536,7 +648,9 @@ class LanguageTaggerService {
         );
         totalTagged += result.tagged;
         totalErrors += result.errors;
+        seenRatingKeys.push(...result.seenRatingKeys);
       } catch (error) {
+        libraryFailed = true;
         logger.error('LanguageTagger: failed to tag library', {
           label: 'LanguageTagger',
           libraryId: config.libraryId,
@@ -547,6 +661,16 @@ class LanguageTaggerService {
       }
     }
 
+    // Remove stale records only once the whole sweep is done, and never after
+    // a library failed outright (we'd wipe every tag of that library)
+    if (!libraryFailed) {
+      await this.pruneRecords(
+        ['movie', 'show', 'season'],
+        seenRatingKeys,
+        totalErrors > 0
+      );
+    }
+
     logger.info('LanguageTagger: scheduled tagging complete', {
       label: 'LanguageTagger',
       totalTagged,
@@ -555,14 +679,52 @@ class LanguageTaggerService {
   }
 
   async clearRecords(): Promise<{ deleted: number }> {
-    const repo = getRepository(LanguageTagRecord);
-    const all = await repo.find();
-    await repo.remove(all);
+    // Single DELETE: repo.remove() on thousands of entities builds an OR chain
+    // SQLite rejects ("Expression tree is too large")
+    const result = await getRepository(LanguageTagRecord)
+      .createQueryBuilder()
+      .delete()
+      .execute();
+    const deleted = result.affected ?? 0;
     logger.info('LanguageTagger: all records cleared', {
       label: 'LanguageTagger',
-      deleted: all.length,
+      deleted,
     });
-    return { deleted: all.length };
+    return { deleted };
+  }
+
+  /**
+   * Delete records of the given media types whose ratingKey was not seen in
+   * the last scan. When `keepUnseenSeasons` is set (scan had errors), season
+   * records are left alone since their show may simply have failed.
+   */
+  private async pruneRecords(
+    mediaTypes: string[],
+    seenRatingKeys: string[],
+    keepUnseenSeasons: boolean
+  ): Promise<void> {
+    const repo = getRepository(LanguageTagRecord);
+    const seen = new Set(seenRatingKeys);
+    const records = await repo
+      .createQueryBuilder('r')
+      .select(['r.id', 'r.ratingKey', 'r.mediaType'])
+      .where('r.mediaType IN (:...types)', { types: mediaTypes })
+      .getMany();
+
+    const staleIds = records
+      .filter((r) => !seen.has(r.ratingKey))
+      .filter((r) => !(keepUnseenSeasons && r.mediaType === 'season'))
+      .map((r) => r.id);
+
+    for (let i = 0; i < staleIds.length; i += DELETE_CHUNK_SIZE) {
+      await repo.delete(staleIds.slice(i, i + DELETE_CHUNK_SIZE));
+    }
+
+    logger.info('LanguageTagger: pruned stale records', {
+      label: 'LanguageTagger',
+      mediaTypes,
+      deleted: staleIds.length,
+    });
   }
 
   async getRecords(params?: {
@@ -578,7 +740,8 @@ class LanguageTaggerService {
       .where('r.mediaType != :season', { season: 'season' })
       .orderBy('r.updatedAt', 'DESC');
 
-    if (params?.mediaType) qb.andWhere('r.mediaType = :mt', { mt: params.mediaType });
+    if (params?.mediaType)
+      qb.andWhere('r.mediaType = :mt', { mt: params.mediaType });
     if (params?.tag) qb.andWhere('r.tag = :tag', { tag: params.tag });
 
     const total = await qb.getCount();

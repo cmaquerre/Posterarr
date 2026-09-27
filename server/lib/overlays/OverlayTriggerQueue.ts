@@ -1,7 +1,7 @@
-import { getRepository } from '@server/datasource';
-import { OverlayLibraryConfig } from '@server/entity/OverlayLibraryConfig';
 import type { PlexLibraryItem } from '@server/api/plexapi';
 import PlexAPI from '@server/api/plexapi';
+import { getRepository } from '@server/datasource';
+import { OverlayLibraryConfig } from '@server/entity/OverlayLibraryConfig';
 import { getAdminUser } from '@server/lib/collections/core/CollectionUtilities';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
@@ -12,6 +12,28 @@ interface QueueEntry {
   value: string; // tmdbId (as string) or ratingKey
   timer: ReturnType<typeof setTimeout>;
   enqueuedAt: number;
+  delayMs: number;
+}
+
+/** External IDs sent by Radarr/Sonarr, used to locate the item in Plex */
+export interface ExternalIds {
+  tmdbId?: number;
+  tvdbId?: number;
+  imdbId?: string;
+}
+
+// Plex may not have indexed (or matched) a freshly imported item when the
+// webhook delay expires, so an unresolved item is retried a few times.
+const MAX_LOOKUP_ATTEMPTS = 3;
+const LIBRARY_PAGE_SIZE = 500;
+const RECENT_WINDOW_MS = 60 * 1000;
+
+function externalGuids(ids: ExternalIds): Set<string> {
+  const guids = new Set<string>();
+  if (ids.tmdbId) guids.add(`tmdb://${ids.tmdbId}`);
+  if (ids.tvdbId) guids.add(`tvdb://${ids.tvdbId}`);
+  if (ids.imdbId) guids.add(`imdb://${ids.imdbId}`);
+  return guids;
 }
 
 /**
@@ -23,12 +45,17 @@ interface QueueEntry {
  */
 class OverlayTriggerQueue {
   private queue = new Map<string, QueueEntry>();
+  private recentlyProcessed = new Map<string, number>();
 
   /**
-   * Enqueue an item identified by TMDB ID.
+   * Enqueue an item identified by its external IDs (TMDB, TVDB, IMDb).
    * Used by Radarr (movies) and Sonarr (series) webhooks.
    */
-  public enqueueTmdbItem(tmdbId: number, mediaType: 'movie' | 'show'): void {
+  public enqueueTmdbItem(
+    ids: ExternalIds,
+    mediaType: 'movie' | 'show',
+    attempt = 1
+  ): void {
     const settings = getSettings();
     const triggerSettings =
       mediaType === 'movie'
@@ -39,8 +66,13 @@ class OverlayTriggerQueue {
       return;
     }
 
+    const primaryId = ids.tmdbId ?? ids.tvdbId ?? ids.imdbId;
+    if (!primaryId) {
+      return;
+    }
+
     const delayMs = (triggerSettings.delayMinutes ?? 5) * 60 * 1000;
-    const key = `tmdb-${mediaType}-${tmdbId}`;
+    const key = `ext-${mediaType}-${primaryId}`;
 
     // Cancel existing timer for this item (debounce)
     const existing = this.queue.get(key);
@@ -54,23 +86,25 @@ class OverlayTriggerQueue {
     }
 
     const timer = setTimeout(
-      () => this.processTmdbItem(tmdbId, mediaType, key),
+      () => this.processTmdbItem(ids, mediaType, key, attempt),
       delayMs
     );
 
     this.queue.set(key, {
       type: 'tmdb',
       mediaType,
-      value: String(tmdbId),
+      value: String(primaryId),
       timer,
       enqueuedAt: Date.now(),
+      delayMs,
     });
 
     logger.info('OverlayTriggerQueue: item enqueued', {
       label: 'OverlayTriggerQueue',
-      tmdbId,
+      ...ids,
       mediaType,
       delayMinutes: triggerSettings.delayMinutes,
+      attempt,
     });
   }
 
@@ -92,9 +126,10 @@ class OverlayTriggerQueue {
     }
 
     // No delay for Plex events — item is already indexed
+    const delayMs = 2000; // 2s grace period for Plex to finish metadata
     const timer = setTimeout(
       () => this.processRatingKeyItem(ratingKey, key),
-      2000 // 2s grace period for Plex to finish metadata
+      delayMs
     );
 
     this.queue.set(key, {
@@ -102,6 +137,7 @@ class OverlayTriggerQueue {
       value: ratingKey,
       timer,
       enqueuedAt: Date.now(),
+      delayMs,
     });
 
     logger.info('OverlayTriggerQueue: Plex item enqueued', {
@@ -111,16 +147,18 @@ class OverlayTriggerQueue {
   }
 
   private async processTmdbItem(
-    tmdbId: number,
+    ids: ExternalIds,
     mediaType: 'movie' | 'show',
-    key: string
+    key: string,
+    attempt: number
   ): Promise<void> {
     this.queue.delete(key);
 
-    logger.info('OverlayTriggerQueue: processing TMDB item', {
+    logger.info('OverlayTriggerQueue: processing item', {
       label: 'OverlayTriggerQueue',
-      tmdbId,
+      ...ids,
       mediaType,
+      attempt,
     });
 
     try {
@@ -143,14 +181,20 @@ class OverlayTriggerQueue {
       }
 
       for (const config of relevantConfigs) {
-        const item = await this.findItemByTmdbId(
+        const item = await this.findItemByExternalIds(
           plexApi,
           config.libraryId,
-          tmdbId,
-          mediaType
+          ids
         );
 
         if (item) {
+          const tmdbGuid = item.Guid?.find((g) => g.id.startsWith('tmdb://'));
+          const tmdbId =
+            ids.tmdbId ??
+            (tmdbGuid
+              ? parseInt(tmdbGuid.id.replace('tmdb://', ''), 10)
+              : undefined);
+
           // Tag first so languageTag is in DB when overlays are rendered
           await this.applyLanguageTagToItem(
             plexApi,
@@ -164,16 +208,34 @@ class OverlayTriggerQueue {
         }
       }
 
+      if (attempt < MAX_LOOKUP_ATTEMPTS) {
+        logger.info(
+          'OverlayTriggerQueue: item not found in Plex yet, will retry',
+          {
+            label: 'OverlayTriggerQueue',
+            ...ids,
+            mediaType,
+            attempt,
+          }
+        );
+        // Don't clobber a newer event queued for the same item meanwhile
+        if (!this.queue.has(key)) {
+          this.enqueueTmdbItem(ids, mediaType, attempt + 1);
+        }
+        return;
+      }
+
       logger.warn('OverlayTriggerQueue: item not found in any Plex library', {
         label: 'OverlayTriggerQueue',
-        tmdbId,
+        ...ids,
         mediaType,
+        attempts: attempt,
         searchedLibraries: relevantConfigs.map((c) => c.libraryName),
       });
     } catch (error) {
-      logger.error('OverlayTriggerQueue: failed to process TMDB item', {
+      logger.error('OverlayTriggerQueue: failed to process item', {
         label: 'OverlayTriggerQueue',
-        tmdbId,
+        ...ids,
         mediaType,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -181,9 +243,10 @@ class OverlayTriggerQueue {
   }
 
   private async processRatingKeyItem(
-    ratingKey: string,
+    originalRatingKey: string,
     key: string
   ): Promise<void> {
+    let ratingKey = originalRatingKey;
     this.queue.delete(key);
 
     logger.info('OverlayTriggerQueue: processing Plex ratingKey item', {
@@ -196,9 +259,25 @@ class OverlayTriggerQueue {
       if (!plexApi) return;
 
       // Get item metadata to determine its library
-      const metadata = await plexApi.getMetadata(ratingKey);
+      let metadata = await plexApi.getMetadata(ratingKey);
 
-      if (!metadata || (metadata.type !== 'movie' && metadata.type !== 'show')) {
+      // library.new fires for new episodes/seasons too: resolve them to their
+      // show so its poster and seasons are refreshed (e.g. new language track)
+      const showRatingKey =
+        metadata?.type === 'episode'
+          ? metadata.grandparentRatingKey
+          : metadata?.type === 'season'
+          ? metadata.parentRatingKey
+          : undefined;
+      if (showRatingKey) {
+        metadata = await plexApi.getMetadata(showRatingKey);
+        ratingKey = showRatingKey;
+      }
+
+      if (
+        !metadata ||
+        (metadata.type !== 'movie' && metadata.type !== 'show')
+      ) {
         logger.debug(
           'OverlayTriggerQueue: skipping non-movie/show item from Plex webhook',
           { label: 'OverlayTriggerQueue', ratingKey, type: metadata?.type }
@@ -215,41 +294,53 @@ class OverlayTriggerQueue {
           c.mediaType === mediaType && c.enabledOverlays.some((o) => o.enabled)
       );
 
-      // Find the library by searching each configured library
-      for (const config of relevantConfigs) {
-        const item = await this.findItemInLibrary(
-          plexApi,
-          config.libraryId,
-          ratingKey
-        );
-        if (item) {
-          // Extract TMDB ID from Plex metadata GUIDs for language tagging
-          const tmdbGuid = metadata.Guid?.find((g) =>
-            g.id.startsWith('tmdb://')
-          );
-          const tmdbId = tmdbGuid
-            ? parseInt(tmdbGuid.id.replace('tmdb://', ''), 10)
-            : null;
+      // A batch of new episodes fires one event per episode: process the
+      // show once
+      const lastProcessed = this.recentlyProcessed.get(ratingKey);
+      if (lastProcessed && Date.now() - lastProcessed < RECENT_WINDOW_MS) {
+        logger.debug('OverlayTriggerQueue: show processed recently, skipping', {
+          label: 'OverlayTriggerQueue',
+          ratingKey,
+          originalRatingKey,
+        });
+        return;
+      }
 
-          // Tag first so languageTag is in DB when overlays are rendered
-          if (tmdbId && !isNaN(tmdbId)) {
-            await this.applyLanguageTagToItem(
-              plexApi,
-              ratingKey,
-              metadata.title,
-              tmdbId,
-              mediaType
-            );
-          }
-
-          await this.applyOverlaysToItem(ratingKey, config.libraryId);
-          return;
+      // Only the library the item actually belongs to
+      const config = relevantConfigs.find(
+        (c) =>
+          metadata.librarySectionID === undefined ||
+          String(metadata.librarySectionID) === String(c.libraryId)
+      );
+      if (config) {
+        for (const [k, t] of this.recentlyProcessed) {
+          if (Date.now() - t >= RECENT_WINDOW_MS)
+            this.recentlyProcessed.delete(k);
         }
+        this.recentlyProcessed.set(ratingKey, Date.now());
+
+        // Extract TMDB ID from Plex metadata GUIDs for language tagging
+        const tmdbGuid = metadata.Guid?.find((g) => g.id.startsWith('tmdb://'));
+        const tmdbId = tmdbGuid
+          ? parseInt(tmdbGuid.id.replace('tmdb://', ''), 10)
+          : undefined;
+
+        // Tag first so languageTag is in DB when overlays are rendered
+        await this.applyLanguageTagToItem(
+          plexApi,
+          ratingKey,
+          metadata.title,
+          tmdbId && !isNaN(tmdbId) ? tmdbId : undefined,
+          mediaType
+        );
+
+        await this.applyOverlaysToItem(ratingKey, config.libraryId);
+        return;
       }
 
       logger.warn(
         'OverlayTriggerQueue: item not found in any overlay-configured library',
-        { label: 'OverlayTriggerQueue', ratingKey }
+        { label: 'OverlayTriggerQueue', ratingKey, originalRatingKey }
       );
     } catch (error) {
       logger.error('OverlayTriggerQueue: failed to process Plex item', {
@@ -261,76 +352,58 @@ class OverlayTriggerQueue {
   }
 
   /**
-   * Search a specific Plex library for an item by TMDB ID.
-   * Uses Plex's GUID search endpoint.
+   * Search a specific Plex library for an item by its external IDs.
+   *
+   * Plex's `guid=` filter only matches an item's primary GUID, which is a
+   * `plex://` GUID for items matched by the modern agents, so it never finds
+   * `tmdb://` IDs. Instead page through the library with includeGuids and
+   * match against each item's external Guid entries.
    */
-  private async findItemByTmdbId(
+  private async findItemByExternalIds(
     plexApi: PlexAPI,
     libraryId: string,
-    tmdbId: number,
-    mediaType: 'movie' | 'show'
+    ids: ExternalIds
   ): Promise<PlexLibraryItem | null> {
+    const wanted = externalGuids(ids);
+    if (wanted.size === 0) return null;
+
     try {
-      const type = mediaType === 'movie' ? 1 : 2;
-      const guid = `tmdb://${tmdbId}`;
-
-      const response = await plexApi['plexClient'].query<{
-        MediaContainer: {
-          totalSize?: number;
-          Metadata?: Array<{
-            ratingKey: string;
-            title: string;
-            type: string;
-            guid?: string;
-            Guid?: { id: string }[];
-          }>;
-        };
-      }>(
-        `/library/sections/${libraryId}/all?type=${type}&guid=${encodeURIComponent(guid)}&includeGuids=1`
-      );
-
-      const metadata = response?.MediaContainer?.Metadata;
-      if (metadata && metadata.length > 0) {
-        const found = metadata[0];
-        logger.debug('OverlayTriggerQueue: found item by TMDB ID', {
-          label: 'OverlayTriggerQueue',
-          tmdbId,
+      let offset = 0;
+      while (true) {
+        const { items, totalSize } = await plexApi.getLibraryContents(
           libraryId,
-          title: found.title,
-          ratingKey: found.ratingKey,
-        });
-        return found as unknown as PlexLibraryItem;
+          { offset, size: LIBRARY_PAGE_SIZE }
+        );
+
+        const found = items.find((item) =>
+          item.Guid?.some((g) => wanted.has(g.id))
+        );
+        if (found) {
+          logger.debug('OverlayTriggerQueue: found item by external ID', {
+            label: 'OverlayTriggerQueue',
+            ...ids,
+            libraryId,
+            title: found.title,
+            ratingKey: found.ratingKey,
+          });
+          return found;
+        }
+
+        offset += items.length;
+        if (items.length === 0 || offset >= totalSize) break;
       }
     } catch (error) {
       logger.debug(
-        'OverlayTriggerQueue: TMDB ID search failed for library, trying next',
+        'OverlayTriggerQueue: external ID search failed for library, trying next',
         {
           label: 'OverlayTriggerQueue',
-          tmdbId,
+          ...ids,
           libraryId,
           error: error instanceof Error ? error.message : String(error),
         }
       );
     }
     return null;
-  }
-
-  /**
-   * Check if a specific ratingKey item exists in a library (lightweight check).
-   */
-  private async findItemInLibrary(
-    plexApi: PlexAPI,
-    libraryId: string,
-    ratingKey: string
-  ): Promise<boolean> {
-    try {
-      const metadata = await plexApi.getMetadata(ratingKey);
-      // Plex metadata doesn't include libraryId directly, but if we can fetch it
-      // and it matches the expected media type, we use it
-      return !!metadata;
-    } catch {
-      return false;
-    }
   }
 
   private async applyOverlaysToItem(
@@ -372,7 +445,7 @@ class OverlayTriggerQueue {
     plexApi: PlexAPI,
     ratingKey: string,
     title: string,
-    tmdbId: number,
+    tmdbId: number | undefined,
     mediaType: 'movie' | 'show'
   ): Promise<void> {
     const settings = getSettings();
@@ -418,14 +491,8 @@ class OverlayTriggerQueue {
     secondsRemaining: number;
     delayMinutes: number;
   }> {
-    const settings = getSettings();
     return Array.from(this.queue.entries()).map(([key, entry]) => {
-      let delayMs = 5 * 60 * 1000;
-      if (entry.mediaType === 'movie') {
-        delayMs = (settings.webhookTriggers?.radarr?.delayMinutes ?? 5) * 60 * 1000;
-      } else if (entry.mediaType === 'show') {
-        delayMs = (settings.webhookTriggers?.sonarr?.delayMinutes ?? 5) * 60 * 1000;
-      }
+      const { delayMs } = entry;
       const elapsed = Date.now() - entry.enqueuedAt;
       const secondsRemaining = Math.max(
         0,

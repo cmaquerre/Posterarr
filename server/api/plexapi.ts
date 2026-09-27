@@ -63,6 +63,8 @@ interface PlexLibrariesResponse {
 export interface PlexMetadata {
   ratingKey: string;
   parentRatingKey?: string;
+  grandparentRatingKey?: string;
+  librarySectionID?: number | string;
   guid: string;
   type: 'movie' | 'show' | 'season' | 'episode';
   title: string;
@@ -552,7 +554,9 @@ class PlexAPI {
     const response = await this.plexClient.query<PlexLibraryResponse>({
       uri: `/library/sections/${id}/all?type=${
         mediaType === 'show' ? '2' : '1'
-      }&sort=addedAt%3Adesc&addedAt>>=${Math.floor(options.addedAt / 1000)}`,
+      }&sort=addedAt%3Adesc&addedAt>>=${Math.floor(
+        options.addedAt / 1000
+      )}&includeGuids=1`,
       extraHeaders: {
         'X-Plex-Container-Start': `0`,
         'X-Plex-Container-Size': `500`,

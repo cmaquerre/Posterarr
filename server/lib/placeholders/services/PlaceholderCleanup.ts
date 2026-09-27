@@ -1,5 +1,5 @@
 import type PlexAPI from '@server/api/plexapi';
-import { getRepository } from '@server/datasource';
+import { getRepository, removeInChunks } from '@server/datasource';
 import { ComingSoonItem } from '@server/entity/ComingSoonItem';
 import type { LibraryItemsCache } from '@server/lib/collections/core/CollectionUtilities';
 import type { CollectionConfig } from '@server/lib/settings';
@@ -128,7 +128,7 @@ export async function deleteAllPlaceholdersForConfig(
       }
     );
 
-    await repository.remove(placeholders);
+    await removeInChunks(repository, placeholders);
 
     logger.info('Placeholder records deleted successfully', {
       label: 'PlaceholderService',
@@ -226,7 +226,7 @@ export async function cleanupOrphanedPlaceholderRecords(): Promise<void> {
     );
 
     // Delete orphaned records (files will be cleaned up separately)
-    await repository.remove(orphanedRecords);
+    await removeInChunks(repository, orphanedRecords);
 
     logger.info('Orphaned placeholder records cleaned up', {
       label: 'PlaceholderService',

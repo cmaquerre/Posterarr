@@ -17,6 +17,43 @@ if (fs.lstatSync(OLD_LOG_FILE, { throwIfNoEntry: false })) {
   fs.unlinkSync(OLD_LOG_FILE);
 }
 
+// Plex URLs carry the admin token as a query parameter; never write it to logs
+const TOKEN_PATTERN = /(X-Plex-Token=|[?&]token=)[^&\s"']+/gi;
+
+const redact = (value: unknown, depth = 0): unknown => {
+  if (typeof value === 'string') {
+    return value.replace(TOKEN_PATTERN, '$1[REDACTED]');
+  }
+  if (depth > 5 || value === null || typeof value !== 'object') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => redact(v, depth + 1));
+  }
+  if (value.constructor !== Object) {
+    return value;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) {
+    out[k] = redact(v, depth + 1);
+  }
+  return out;
+};
+
+const SPLAT = Symbol.for('splat');
+
+const redactSecrets = winston.format((info) => {
+  for (const key of Object.keys(info)) {
+    info[key] = redact(info[key]);
+  }
+  // Transports that run splat() again re-merge the raw metadata from here
+  const splat = (info as unknown as Record<symbol, unknown>)[SPLAT];
+  if (Array.isArray(splat)) {
+    (info as unknown as Record<symbol, unknown>)[SPLAT] = redact(splat);
+  }
+  return info;
+});
+
 const hformat = winston.format.printf(
   ({ level, label, message, timestamp, ...metadata }) => {
     let msg = `${timestamp} [${level}]${
@@ -58,6 +95,7 @@ const logger = winston.createLogger({
   level: process.env.LOG_LEVEL?.toLowerCase() || 'debug',
   format: winston.format.combine(
     winston.format.splat(),
+    redactSecrets(),
     winston.format.timestamp(),
     hformat
   ),

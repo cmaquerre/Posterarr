@@ -1,5 +1,5 @@
 import PlexAPI, { type PlexLibraryItem } from '@server/api/plexapi';
-import { getRepository } from '@server/datasource';
+import { getRepository, removeInChunks } from '@server/datasource';
 import { CollectionMissingItems } from '@server/entity/CollectionMissingItems';
 import { ComingSoonItem } from '@server/entity/ComingSoonItem';
 import { getSettings } from '@server/lib/settings';
@@ -480,7 +480,7 @@ class CollectionsQuickSync {
       // Delete ALL database records for this placeholder across ALL collections
       if (fileDeleted) {
         try {
-          await placeholderRepository.remove(allPlaceholderRecords);
+          await removeInChunks(placeholderRepository, allPlaceholderRecords);
           deletedCount += allPlaceholderRecords.length;
           logger.info(
             'Deleted placeholder records for all collections (real content exists)',
